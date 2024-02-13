@@ -21,6 +21,7 @@ app.use(cors());
 app.use(express.json());
 app.use('/imgprofile', express.static('imgprofile'));
 app.use('/albumworkings', express.static('albumworkings'));
+app.use('/product', express.static('product'));
 // app.use(bodyParser.json());
 // app.use(fileUpload());
 app.use(bodyParser.urlencoded({extended:false}))
@@ -212,6 +213,43 @@ const workings = sequelize.define("workings",{
     allowNull: false,
   },
   image_path: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+});
+
+const products = sequelize.define("products",{
+  id: {
+    type: Sequelize.INTEGER,
+    primaryKey: true,
+    autoIncrement: true,
+  },
+  user_id: {
+    type: Sequelize.INTEGER,
+    references: {
+      model: User,
+      key: 'id',
+      onDelete: 'CASCADE', // เพิ่มคำสั่ง onDelete ที่เป็น 'CASCADE'
+    },
+    allowNull: false,
+  },
+  product_name: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  category: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  description: {
+    type: Sequelize.TEXT,
+    allowNull: false,
+  },
+  price: {
+    type: Sequelize.STRING,
+    allowNull: false,
+  },
+  imgProduct: {
     type: Sequelize.STRING,
     allowNull: false,
   },
@@ -425,6 +463,18 @@ const storageverify = multer.diskStorage({
 
 const uploadverify = multer({ storage: storageverify });
 
+const storageproduct = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'product/')
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+    cb(null, file.fieldname + '-' + uniqueSuffix + ".jpg")
+  }
+})
+
+const uploadproduct = multer({ storage: storageproduct })
+
 // const verifyToken = (req, res, next) => {
 //   const token = req.header('Authorization');
 //   if (!token) return res.status(401).send('Access Denied');
@@ -496,6 +546,35 @@ app.post('/api/uploadworkings',authenticateToken, uploadworkings.array('file', 1
   }
 });
 
+app.post('/api/uploadproduct',authenticateToken, uploadproduct.array('file', 4), async function (req, res, next) {
+  try {
+
+    const files = req.files;
+    const { product_name , category, description , price ,  } = req.body;
+
+    // ตรวจสอบว่ามีไฟล์ถูกอัพโหลดหรือไม่
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded.' });
+    }
+    const user_id = req.user.id;
+    // ทำการเก็บข้อมูลลงในฐานข้อมูล
+    const fileNames = files.map(file => file.filename);
+    const createdProduct = await products.create({
+      product_name: product_name,
+      category: category,
+      description: description,
+      price: price ,
+      imgProduct: fileNames.join(', '), // สามารถเปลี่ยนวิธีเก็บไฟล์ได้ตามความต้องการ
+      user_id: user_id,
+    });
+
+    res.status(201).json({ success: true, product: createdProduct });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.get('/api/getworkings/:id', authenticateToken, async (req, res) => {
   try {
     const userId = req.params.id;
@@ -530,6 +609,29 @@ app.get('/api/getworkings/:id', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    // Fetch workings data for the specific user
+    const userProducts = await products.findAll({
+      where: {
+        user_id: userId,
+      },
+    });
+
+    // If no workings found for the user
+    if (!userProducts || userProducts.length === 0) {
+      return res.status(404).json({ error: 'No products found for the user.' });
+    }
+
+    // Return the data and image URLs
+    res.status(200).json({ Products: userProducts });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 // แก้ไข endpoint สำหรับการสร้างโปรไฟล์
 app.post('/api/accountprofile',authenticateToken,uploadprofile.single('imgProfile'), async (req, res) => {
