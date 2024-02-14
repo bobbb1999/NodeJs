@@ -575,6 +575,44 @@ app.post('/api/uploadproduct',authenticateToken, uploadproduct.array('file', 4),
   }
 });
 
+app.patch('/api/updateproduct/:id', authenticateToken, uploadproduct.array('file', 4), async function (req, res, next) {
+  try {
+    const files = req.files;
+    const { product_name, category, description, price } = req.body;
+    const productId = req.params.id;
+
+    // ทำการเก็บข้อมูลลงในฐานข้อมูล
+    let imgProduct = null;
+    if (files.length > 0) {
+      const fileNames = files.map(file => file.filename);
+      imgProduct = fileNames.join(', '); // สามารถเปลี่ยนวิธีเก็บไฟล์ได้ตามความต้องการ
+    }
+
+    const updatedFields = {};
+    if (product_name) updatedFields.product_name = product_name;
+    if (category) updatedFields.category = category;
+    if (description) updatedFields.description = description;
+    if (price) updatedFields.price = price;
+    if (imgProduct !== null) updatedFields.imgProduct = imgProduct;
+
+    const updatedProduct = await products.update(updatedFields, {
+      where: {
+        id: productId
+      }
+    });
+
+    if (updatedProduct[0] === 0) {
+      return res.status(404).json({ error: 'Product not found.' });
+    }
+
+    res.status(200).json({ success: true, message: 'Product updated successfully.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
 app.get('/api/getworkings/:id', authenticateToken, async (req, res) => {
   try {
     const userId = req.params.id;
@@ -611,7 +649,7 @@ app.get('/api/getworkings/:id', authenticateToken, async (req, res) => {
 
 app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
   try {
-    const userId = req.params.id;
+    const userId = req.user.id;
 
     // Fetch workings data for the specific user
     const userProducts = await products.findAll({
@@ -622,16 +660,50 @@ app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
 
     // If no workings found for the user
     if (!userProducts || userProducts.length === 0) {
-      return res.status(404).json({ error: 'No products found for the user.' });
+      return res.status(404).json({ error: 'No workings found for the user.' });
     }
 
+    // Create an array to store workings with image URLs
+    const productsWithImages = userProducts.map(product => {
+      const imagePaths = product.imgProduct.split(',').map(path => path.trim());
+      const imageUrls = imagePaths.map(imagePath => `${req.protocol}://${req.get('host')}/product/${imagePath}`);
+      return {
+        ...product.dataValues,
+        imageUrls,
+      };
+    });
+
     // Return the data and image URLs
-    res.status(200).json({ Products: userProducts });
+    res.status(200).json({ products: productsWithImages });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+// app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
+//   try {
+//     const userId = req.params.id;
+
+//     // Fetch workings data for the specific user
+//     const userProducts = await products.findAll({
+//       where: {
+//         user_id: userId,
+//       },
+//     });
+
+//     // If no workings found for the user
+//     if (!userProducts || userProducts.length === 0) {
+//       return res.status(404).json({ error: 'No products found for the user.' });
+//     }
+
+//     // Return the data and image URLs
+//     res.status(200).json({ Products: userProducts });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ error: 'Internal Server Error' });
+//   }
+// });
 
 // แก้ไข endpoint สำหรับการสร้างโปรไฟล์
 app.post('/api/accountprofile',authenticateToken,uploadprofile.single('imgProfile'), async (req, res) => {
