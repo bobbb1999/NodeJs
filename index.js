@@ -681,29 +681,28 @@ app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
-//   try {
-//     const userId = req.params.id;
+app.delete('/api/deleteproduct/:id', authenticateToken, async function (req, res, next) {
+  try {
+    const id = req.params.id;
+    const user_id = req.user.id;
 
-//     // Fetch workings data for the specific user
-//     const userProducts = await products.findAll({
-//       where: {
-//         user_id: userId,
-//       },
-//     });
+    // ค้นหาสินค้าที่ต้องการลบ
+    const product = await products.findOne({ where: { id: id, user_id: user_id } });
 
-//     // If no workings found for the user
-//     if (!userProducts || userProducts.length === 0) {
-//       return res.status(404).json({ error: 'No products found for the user.' });
-//     }
+    // ตรวจสอบว่าสินค้านี้มีอยู่หรือไม่
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found.' });
+    }
 
-//     // Return the data and image URLs
-//     res.status(200).json({ Products: userProducts });
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ error: 'Internal Server Error' });
-//   }
-// });
+    // ลบสินค้า
+    await product.destroy();
+
+    res.status(200).json({ success: true, message: 'Product deleted successfully.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 // แก้ไข endpoint สำหรับการสร้างโปรไฟล์
 app.post('/api/accountprofile',authenticateToken,uploadprofile.single('imgProfile'), async (req, res) => {
