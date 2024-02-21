@@ -22,6 +22,8 @@ app.use(express.json());
 app.use('/imgprofile', express.static('imgprofile'));
 app.use('/albumworkings', express.static('albumworkings'));
 app.use('/product', express.static('product'));
+app.use('/imgcard', express.static('imgcard'));
+app.use('/imgface', express.static('imgface'));
 // app.use(bodyParser.json());
 // app.use(fileUpload());
 app.use(bodyParser.urlencoded({extended:false}))
@@ -383,19 +385,19 @@ const RentEquipmentProfile = sequelize.define(
       },
       allowNull: false,
     },
-    provinc: {
+    province: {
       type: Sequelize.JSON,
       allowNull: false,
     },
-    line_id: {
+    lineId: {
       type: Sequelize.STRING,
       allowNull: false,
     },
-    facebook: {
+    Facebook: {
       type: Sequelize.STRING,
       allowNull: false,
     },
-    instgram: {
+    Instagram: {
       type: Sequelize.STRING,
       allowNull: false,
     },
@@ -403,11 +405,11 @@ const RentEquipmentProfile = sequelize.define(
       type: Sequelize.STRING,
       allowNull: false,
     },
-    image_profile: {
+    imgProfile: {
       type: Sequelize.STRING,
       allowNull: false,
     },
-    description: {
+    about: {
       type: Sequelize.STRING,
       allowNull: false,
     },
@@ -647,6 +649,8 @@ app.get('/api/getworkings/:id', authenticateToken, async (req, res) => {
   }
 });
 
+
+
 app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -755,6 +759,160 @@ app.get('/api/getAllPhotographerProfiles', authenticateToken, async (req, res) =
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+app.get('/api/getDataVerify', authenticateToken, async (req, res) => {
+  try {
+    // Find all PhotographerVerify
+    const allPhotographerVerify = await PhotographerVerify.findAll();
+
+    if (!allPhotographerVerify || allPhotographerVerify.length === 0) {
+      return res.status(404).json({ error: 'No PhotographerVerify found' });
+    }
+
+    // Map PhotographerVerify to include image URLs
+    const verifyWithImageURLs = allPhotographerVerify.map(verify => {
+      const imgCardURL = verify.imgCardId ? `${req.protocol}://${req.get('host')}/imgcard/${verify.imgCardId}` : '';
+      const imgFaceURL = verify.imgFace ? `${req.protocol}://${req.get('host')}/imgface/${verify.imgFace}` : '';
+      return {
+        photographerVerify: verify,
+        imgCardURL,
+        imgFaceURL
+      };
+    });
+
+    // Send the PhotographerVerify data along with the image URLs
+    res.status(200).json(verifyWithImageURLs);
+  } catch (error) {
+    console.error('Error fetching PhotographerVerify data:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
+app.get('/api/getVerifyAccount', authenticateToken, checkUserRole('admin'), async (req, res) => {
+  try {
+    // Find all PhotographerProfiles
+    const photographerVerifys = await PhotographerVerify.findAll();
+
+    // Find all EquipmentRentalVerifys
+    const equipmentRentalVerifys = await EquipmentRentalVerify.findAll();
+
+    // สร้าง URL สำหรับรูปภาพและเพิ่มในข้อมูลทุกๆโปรไฟล์ของ PhotographerVerify
+    const profilesWithImageURLs = photographerVerifys.map(photo => ({
+      ...photo.dataValues,
+      imgCardIdURL: `${req.protocol}://${req.get('host')}/imgcard/${photo.imgCardId}`,
+      imgFaceURL: `${req.protocol}://${req.get('host')}/imgface/${photo.imgFace}`,
+    }));
+
+    // สร้าง URL สำหรับรูปภาพและเพิ่มในข้อมูลทุกๆโปรไฟล์ของ EquipmentRentalVerify
+    const equipmentWithImageURLs = equipmentRentalVerifys.map(equipment => ({
+      ...equipment.dataValues,
+      imgCardIdURL: `${req.protocol}://${req.get('host')}/imgcard/${equipment.imgCardId}`,
+      imgFaceURL: `${req.protocol}://${req.get('host')}/imgface/${equipment.imgFace}`,
+    }));
+
+    // ส่งข้อมูล PhotographerProfiles และ EquipmentRentalVerify พร้อม URL รูปภาพกลับ
+    res.status(200).json({
+      photographerVerifys: profilesWithImageURLs,
+      equipmentRentalVerifys: equipmentWithImageURLs
+    });
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
+app.get('/api/getDataProfile', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    // Find PhotographerProfile for the authenticated user
+    const userPhotographerProfile = await PhotographerProfile.findOne({
+      where: {
+        user_id: userId,
+      },
+    });
+
+    if (!userPhotographerProfile) {
+      return res.status(404).json({ error: 'PhotographerProfile not found for this user' });
+    }
+
+    // Create URL for the profile image
+    const imgProfileURL = `${req.protocol}://${req.get('host')}/imgprofile/${userPhotographerProfile.imgProfile}`;
+
+    // Send the PhotographerProfile data along with the image URL
+    res.status(200).json({ photographerProfile: userPhotographerProfile, imgProfileURL });
+  } catch (error) {
+    console.error('Error fetching PhotographerProfile data:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/getStatusPhotographer', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    // Find PhotographerProfile for the authenticated user
+    const photographerVerifys  = await PhotographerVerify.findOne({
+      where: {
+        user_id: userId,
+      },
+      attributes: ['status']
+    });
+
+    if (!photographerVerifys ) {
+      return res.status(404).json({ error: 'Photographer verification pending or not successful' });
+    }
+
+    // Send the PhotographerProfile data along with the image URL
+    res.status(200).json({ status: photographerVerifys.status});
+  } catch (error) {
+    console.error('Error fetching PhotographerProfile data:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/getImagePhotoProfile', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id; // รับ user.id จาก middleware
+
+    // หา PhotographerProfile โดยใช้ userId จาก middleware
+    let profile = await PhotographerProfile.findOne({ 
+      where: {
+        user_id: userId,
+      },
+      attributes: ['imgProfile'] // ระบุเฉพาะคอลัมน์ imgProfile เท่านั้น
+    });
+
+    // เช็คว่ามี PhotographerProfile หรือไม่
+    if (!profile || !profile.imgProfile) {
+      // หา RentEquipmentProfile แทน
+      profile = await RentEquipmentProfile.findOne({ 
+        where: {
+          user_id: userId,
+        },
+        attributes: ['imgProfile']
+      });
+
+      // เช็คว่ามี RentEquipmentProfile หรือไม่
+      if (!profile || !profile.imgProfile) {
+        return res.status(404).json({ error: 'Profile not found' });
+      }
+    }
+
+    // สร้าง URL สำหรับรูปภาพและเพิ่มในข้อมูลโปรไฟล์
+    const imgProfileURL = `${req.protocol}://${req.get('host')}/imgprofile/${profile.imgProfile}`;
+    const profileWithImageURL = {
+      ...profile.dataValues,
+      imgProfileURL,
+    };
+
+    // ส่งข้อมูลโปรไฟล์พร้อม URL รูปภาพกลับ
+    res.status(200).json({ photographerProfile: profileWithImageURL });
+  } catch (error) {
+    console.error('Error fetching profile data:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 // app.post('/api/accountprofile', authenticateToken, async (req, res) => {
 //   try {
 //     const user_id = req.user.id;
@@ -792,6 +950,7 @@ app.get('/api/getAllPhotographerProfiles', authenticateToken, async (req, res) =
 // });
 
 
+
 app.post("/api/VerifyPhotograhper", authenticateToken, uploadverify.fields([{ name: 'imgFace', maxCount: 1 }, { name: 'imgCardId', maxCount: 1 }]), async (req, res) => {
   try {
     const user_id = req.user.id;
@@ -823,6 +982,34 @@ app.post("/api/VerifyPhotograhper", authenticateToken, uploadverify.fields([{ na
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
+app.patch("/api/UpdatePhotographerStatus/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    // Find the PhotographerVerify record by ID
+    const photographerVerify = await PhotographerVerify.findByPk(id);
+
+    if (!photographerVerify) {
+      return res.status(404).json({ message: "PhotographerVerify not found" });
+    }
+
+    // Update only the status field
+    photographerVerify.status = status;
+
+    // Save the updated record
+    await photographerVerify.save();
+
+    // Respond with the updated PhotographerVerify record
+    res.json({ message: "Status updated successfully", PhotographerVerify: photographerVerify });
+  } catch (error) {
+    console.error("Error updating status:", error);
+    // Handle errors and respond with an error message
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
 
 app.post("/api/VerifyRent", authenticateToken, uploadverify.fields([{ name: 'imgFace', maxCount: 1 }, { name: 'imgCardId', maxCount: 1 }]), async (req, res) => {
   try {
