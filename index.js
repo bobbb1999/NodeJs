@@ -335,7 +335,7 @@ const PhotographerProfile = sequelize.define(
       allowNull: false,
     },
     about: {
-      type: Sequelize.STRING,
+      type: Sequelize.TEXT,
       allowNull: false,
     },
     lineId: {
@@ -414,7 +414,7 @@ const RentEquipmentProfile = sequelize.define(
       allowNull: false,
     },
     about: {
-      type: Sequelize.STRING,
+      type: Sequelize.TEXT,
       allowNull: false,
     },
   },
@@ -653,7 +653,39 @@ app.get('/api/getworkings/:id', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.params.id;
 
+    // Fetch workings data for the specific user
+    const userProducts = await products.findAll({
+      where: {
+        user_id: userId,
+      },
+    });
+
+    // If no workings found for the user
+    if (!userProducts || userProducts.length === 0) {
+      return res.status(404).json({ error: 'No workings found for the user.' });
+    }
+
+    // Create an array to store workings with image URLs
+    const productsWithImages = userProducts.map(product => {
+      const imagePaths = product.imgProduct.split(',').map(path => path.trim());
+      const imageUrls = imagePaths.map(imgProduct => `${req.protocol}://${req.get('host')}/product/${imgProduct}`);
+      return {
+        ...product.dataValues,
+        imageUrls,
+      };
+    });
+
+    // Return the data and image URLs
+    res.status(200).json({ products: productsWithImages });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
   try {
@@ -1394,6 +1426,31 @@ app.get('/api/getPhotographerProfile/:id', authenticateToken, async (req, res) =
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+
+app.get('/api/getEquipmentRentProfile/:id', authenticateToken, async (req, res) => {
+  try {
+    // Find PhotographerProfile by ID
+    const rentEquipmentProfile = await RentEquipmentProfile.findByPk(req.params.id);
+
+    if (!rentEquipmentProfile) {
+      return res.status(404).json({ error: 'RentEquipmentProfile not found' });
+    }
+
+    // Create URL for the profile image
+    const profileWithImageURL = {
+      ...rentEquipmentProfile.dataValues,
+      imgProfileURL: `${req.protocol}://${req.get('host')}/imgprofile/${rentEquipmentProfile.imgProfile}`,
+    };
+
+    // Send PhotographerProfile data with image URL back
+    res.status(200).json({ rentEquipmentProfile: profileWithImageURL });
+  } catch (error) {
+    console.error('Error fetching PhotographerProfile data by ID:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.get('/api/photographer/:id', authenticateToken , async (req, res) => {
   try {
     const { id } = req.params;
