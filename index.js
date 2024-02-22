@@ -385,6 +385,10 @@ const RentEquipmentProfile = sequelize.define(
       },
       allowNull: false,
     },
+    username:{
+      type: Sequelize.STRING,
+      allowNull: false,
+    },
     province: {
       type: Sequelize.JSON,
       allowNull: false,
@@ -401,7 +405,7 @@ const RentEquipmentProfile = sequelize.define(
       type: Sequelize.STRING,
       allowNull: false,
     },
-    tel: {
+    Tel: {
       type: Sequelize.STRING,
       allowNull: false,
     },
@@ -736,6 +740,33 @@ app.post('/api/accountprofile',authenticateToken,uploadprofile.single('imgProfil
   }
 });
 
+// แก้ไข endpoint สำหรับการสร้างโปรไฟล์
+app.post('/api/accountprofilerent',authenticateToken,uploadprofile.single('imgProfile'), async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    const { username, about, lineId, Facebook, Instagram, province , Tel } = req.body;
+    const imgProfile = req.file.filename;
+    // Save the form data to the database
+    const NewRentEquipmentProfile = await RentEquipmentProfile.create({
+      username,
+      about,
+      lineId,
+      Facebook,
+      Instagram,
+      province,
+      imgProfile,
+      Tel,
+      user_id : user_id,
+
+    });
+
+    // Respond with a success message
+    res.status(201).json({ message: 'Form data saved successfully', RentEquipmentProfile: NewRentEquipmentProfile });
+  } catch (error) {
+    console.error('Error saving form data:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 app.get('/api/getAllPhotographerProfiles', authenticateToken, async (req, res) => {
   try {
@@ -759,6 +790,30 @@ app.get('/api/getAllPhotographerProfiles', authenticateToken, async (req, res) =
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+app.get('/api/getAllRentProfiles', authenticateToken, async (req, res) => {
+  try {
+    // Find all PhotographerProfiles
+    const RentEquipmentProfiles = await RentEquipmentProfile.findAll();
+
+    if (!RentEquipmentProfiles) {
+      return res.status(404).json({ error: 'PhotographerProfiles not found' });
+    }
+
+    // สร้าง URL สำหรับรูปภาพและเพิ่มในข้อมูลทุกๆโปรไฟล์
+    const profilesWithImageURLs = RentEquipmentProfiles.map(profile => ({
+      ...profile.dataValues,
+      imgProfileURL: `${req.protocol}://${req.get('host')}/imgprofile/${profile.imgProfile}`,
+    }));
+
+    // ส่งข้อมูล PhotographerProfiles พร้อม URL รูปภาพกลับ
+    res.status(200).json({ RentEquipmentProfiles: profilesWithImageURLs });
+  } catch (error) {
+    console.error('Error fetching PhotographerProfiles data:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.get('/api/getDataVerify', authenticateToken, async (req, res) => {
   try {
     // Find all PhotographerVerify
@@ -787,6 +842,57 @@ app.get('/api/getDataVerify', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/getVerifyPhotographer', authenticateToken, async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    // Find PhotographerVerify for the user
+    const photographerVerify = await PhotographerVerify.findOne({ where: { user_id: user_id } });
+
+    if (!photographerVerify) {
+      return res.status(404).json({ error: 'No PhotographerVerify found' });
+    }
+
+    // Define image URLs
+    const imgCardURL = photographerVerify.imgCardId ? `${req.protocol}://${req.get('host')}/imgcard/${photographerVerify.imgCardId}` : '';
+    const imgFaceURL = photographerVerify.imgFace ? `${req.protocol}://${req.get('host')}/imgface/${photographerVerify.imgFace}` : '';
+
+    // Send PhotographerVerify data along with image URLs
+    res.status(200).json({
+      photographerVerify,
+      imgCardURL,
+      imgFaceURL
+    });
+  } catch (error) {
+    console.error('Error fetching PhotographerVerify data:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/getVerifyRent', authenticateToken, async (req, res) => {
+  try {
+    const user_id = req.user.id;
+    // Find PhotographerVerify for the user
+    const EquipmentRentalVerifys = await EquipmentRentalVerify.findOne({ where: { user_id: user_id } });
+
+    if (!EquipmentRentalVerifys) {
+      return res.status(404).json({ error: 'No PhotographerVerify found' });
+    }
+
+    // Define image URLs
+    const imgCardURL = EquipmentRentalVerifys.imgCardId ? `${req.protocol}://${req.get('host')}/imgcard/${EquipmentRentalVerifys.imgCardId}` : '';
+    const imgFaceURL = EquipmentRentalVerifys.imgFace ? `${req.protocol}://${req.get('host')}/imgface/${EquipmentRentalVerifys.imgFace}` : '';
+
+    // Send PhotographerVerify data along with image URLs
+    res.status(200).json({
+      EquipmentRentalVerifys,
+      imgCardURL,
+      imgFaceURL
+    });
+  } catch (error) {
+    console.error('Error fetching PhotographerVerify data:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 app.get('/api/getVerifyAccount', authenticateToken, checkUserRole('admin'), async (req, res) => {
   try {
@@ -847,6 +953,31 @@ app.get('/api/getDataProfile', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/getDataProfileRent', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    // Find PhotographerProfile for the authenticated user
+    const userRentEquipmentProfile = await RentEquipmentProfile.findOne({
+      where: {
+        user_id: userId,
+      },
+    });
+
+    if (!userRentEquipmentProfile) {
+      return res.status(404).json({ error: 'RentEquipmentProfile not found for this user' });
+    }
+
+    // Create URL for the profile image
+    const imgProfileURL = `${req.protocol}://${req.get('host')}/imgprofile/${userRentEquipmentProfile.imgProfile}`;
+
+    // Send the PhotographerProfile data along with the image URL
+    res.status(200).json({ RentEquipmentProfile: userRentEquipmentProfile, imgProfileURL });
+  } catch (error) {
+    console.error('Error fetching PhotographerProfile data:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.get('/api/getStatusPhotographer', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -864,6 +995,29 @@ app.get('/api/getStatusPhotographer', authenticateToken, async (req, res) => {
 
     // Send the PhotographerProfile data along with the image URL
     res.status(200).json({ status: photographerVerifys.status});
+  } catch (error) {
+    console.error('Error fetching PhotographerProfile data:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/getStatusRent', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    // Find PhotographerProfile for the authenticated user
+    const EquipmentRentalVerifys  = await EquipmentRentalVerify.findOne({
+      where: {
+        user_id: userId,
+      },
+      attributes: ['status']
+    });
+
+    if (!EquipmentRentalVerifys ) {
+      return res.status(404).json({ error: 'Photographer verification pending or not successful' });
+    }
+
+    // Send the PhotographerProfile data along with the image URL
+    res.status(200).json({ status: EquipmentRentalVerifys.status});
   } catch (error) {
     console.error('Error fetching PhotographerProfile data:', error);
     res.status(500).json({ error: 'Internal Server Error' });
@@ -1305,6 +1459,7 @@ app.get('/rent/:id', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 
   sequelize.sync({ force: false }).then(() => {
   console.log("Database synced");
