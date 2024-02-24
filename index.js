@@ -915,6 +915,34 @@ app.get('/api/getDataVerify', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/getDataVerifyRent', authenticateToken, async (req, res) => {
+  try {
+    // Find all PhotographerVerify
+    const allEquipmentRentalVerify = await EquipmentRentalVerify.findAll();
+
+    if (!allEquipmentRentalVerify || allEquipmentRentalVerify.length === 0) {
+      return res.status(404).json({ error: 'No EquipmentRentalVerify found' });
+    }
+
+    // Map PhotographerVerify to include image URLs
+    const verifyWithImageURLs = allEquipmentRentalVerify.map(verify => {
+      const imgCardURL = verify.imgCardId ? `${req.protocol}://${req.get('host')}/imgcard/${verify.imgCardId}` : '';
+      const imgFaceURL = verify.imgFace ? `${req.protocol}://${req.get('host')}/imgface/${verify.imgFace}` : '';
+      return {
+        EquipmentRentalVerify: verify,
+        imgCardURL,
+        imgFaceURL
+      };
+    });
+
+    // Send the PhotographerVerify data along with the image URLs
+    res.status(200).json(verifyWithImageURLs);
+  } catch (error) {
+    console.error('Error fetching PhotographerVerify data:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.get('/api/getVerifyPhotographer', authenticateToken, async (req, res) => {
   try {
     const user_id = req.user.id;
@@ -1237,6 +1265,32 @@ app.patch("/api/UpdatePhotographerStatus/:id", authenticateToken, async (req, re
   }
 });
 
+app.patch("/api/UpdateEquipmentRentalStatus/:id", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    // Find the PhotographerVerify record by ID
+    const equipmentRentalVerify = await EquipmentRentalVerify.findByPk(id);
+
+    if (!equipmentRentalVerify) {
+      return res.status(404).json({ message: "equipmentRentalVerify not found" });
+    }
+
+    // Update only the status field
+    equipmentRentalVerify.status = status;
+
+    // Save the updated record
+    await equipmentRentalVerify.save();
+
+    // Respond with the updated PhotographerVerify record
+    res.json({ message: "Status updated successfully", EquipmentRentalVerify: equipmentRentalVerify });
+  } catch (error) {
+    console.error("Error updating status:", error);
+    // Handle errors and respond with an error message
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
 
 app.post("/api/VerifyRent", authenticateToken, uploadverify.fields([{ name: 'imgFace', maxCount: 1 }, { name: 'imgCardId', maxCount: 1 }]), async (req, res) => {
   try {
