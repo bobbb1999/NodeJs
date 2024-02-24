@@ -655,7 +655,7 @@ app.get('/api/getworkings/:id', authenticateToken, async (req, res) => {
 
 app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
   try {
-    const userId = req.params.id;
+    const userId = req.user.id;
 
     // Fetch workings data for the specific user
     const userProducts = await products.findAll({
@@ -687,20 +687,28 @@ app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
+app.get('/api/getAllProducts/:id', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.params.id;
+    const { category } = req.query; // เพิ่มบรรทัดนี้เพื่อรับค่า category จาก query parameter
+
+    let whereClause = {
+      user_id: userId,
+    };
+
+    // เพิ่มเงื่อนไขการกรองตาม category ถ้ามี category ที่ถูกส่งมา
+    if (category) {
+      whereClause.category = category;
+    }
 
     // Fetch workings data for the specific user
     const userProducts = await products.findAll({
-      where: {
-        user_id: userId,
-      },
+      where: whereClause, // ใช้ whereClause เพื่อกรองผลลัพธ์ตาม category
     });
 
     // If no workings found for the user
     if (!userProducts || userProducts.length === 0) {
-      return res.status(404).json({ error: 'No workings found for the user.' });
+      return res.status(404).json({ error: 'No products found for the user.' });
     }
 
     // Create an array to store workings with image URLs
@@ -720,6 +728,39 @@ app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+
+app.get('/api/getOneProduct/:id', authenticateToken, async (req, res) => {
+  try {
+    const productId = req.params.id;
+
+    // Fetch product data by ID
+    const product = await products.findOne({
+      where: {
+        id: productId,
+      },
+    });
+
+    // If product not found
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found.' });
+    }
+
+    // Process image URLs if available
+    let imageUrls = [];
+    if (product.imgProduct) {
+      const imagePaths = product.imgProduct.split(',').map(path => path.trim());
+      imageUrls = imagePaths.map(imagePath => `${req.protocol}://${req.get('host')}/product/${imagePath}`);
+    }
+
+    // Return product data with image URLs
+    res.status(200).json({ product: { ...product.dataValues, imageUrls } });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 
 app.delete('/api/deleteproduct/:id', authenticateToken, async function (req, res, next) {
   try {
@@ -1450,6 +1491,62 @@ app.get('/api/getEquipmentRentProfile/:id', authenticateToken, async (req, res) 
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+app.get('/api/getRentEquipmentProfileByProductId/:id', authenticateToken, async (req, res) => {
+  try {
+    const productId = req.params.id;
+
+    // Find the product by its id
+    const product = await products.findOne({
+      where: {
+        id: productId,
+      },
+    });
+
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found.' });
+    }
+
+    // Get the user_id associated with the product
+    const userId = product.user_id;
+
+    // Get the product data with image URLs
+    let imageUrls = [];
+    if (product.imgProduct) {
+      const imagePaths = product.imgProduct.split(',').map(path => path.trim());
+      imageUrls = imagePaths.map(imagePath => `${req.protocol}://${req.get('host')}/product/${imagePath}`);
+    }
+
+    const productData = {
+      ...product.dataValues,
+      imageUrls,
+    };
+
+    // Find the RentEquipmentProfile by the user_id
+    const rentEquipmentProfile = await RentEquipmentProfile.findOne({
+      where: {
+        user_id: userId,
+      },
+    });
+
+    if (!rentEquipmentProfile) {
+      return res.status(404).json({ error: 'RentEquipmentProfile not found.' });
+    }
+
+    const profileWithImageURL = {
+      ...rentEquipmentProfile.dataValues,
+      imgProfileURL: `${req.protocol}://${req.get('host')}/imgprofile/${rentEquipmentProfile.imgProfile}`,
+      product: productData, // Add product data to the response
+    };
+
+    res.status(200).json({ rentEquipmentProfile: profileWithImageURL });
+  } catch (error) {
+    console.error('Error fetching RentEquipmentProfile by Product ID:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
 
 app.get('/api/photographer/:id', authenticateToken , async (req, res) => {
   try {
