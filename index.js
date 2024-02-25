@@ -260,6 +260,56 @@ const products = sequelize.define("products",{
 // User.hasMany(EquipmentRentalVerify);
 // EquipmentRentalVerify.belongsTo(User);
 
+const ProductReview  = sequelize.define(
+  "product_reviews",
+  {
+    id: {
+      type: Sequelize.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    reviewer_id: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      references: {
+        model: User,
+        key: 'id',
+      },
+    },
+    reviewed_id: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      references: {
+        model: products,
+        key: 'id',
+      },
+    },
+    review_type: {
+      type: Sequelize.STRING,
+      allowNull: false,
+      // ค่าที่ยอมรับได้คือ "product" หรือ "rent_equipment"
+    },
+    rating: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      // คะแนนดาว 1-5
+    },
+    comment: {
+      type: Sequelize.TEXT,
+      allowNull: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+ProductReview.belongsTo(User, { foreignKey: 'reviewer_id' }); // สมมติว่า reviewer_id เป็นคีย์เอาไว้เชื่อมโมเดล ProductReview กับโมเดล User
+// User.hasMany(ProductReview, { foreignKey: 'reviewer_id' });
+// ProductReview.belongsTo(User, { foreignKey: 'reviewer_id' });
+
+// User.hasMany(ProductReview, { foreignKey: 'reviewed_id' });
+// ProductReview.belongsTo(User, { foreignKey: 'reviewed_id' });
 
 const reviews = sequelize.define("reviews", {
   id: {
@@ -1668,6 +1718,68 @@ app.get('/rent/:id', async (req, res) => {
   }
 });
 
+app.post('/api/reviews', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id
+    const { reviewedId, reviewType, rating, comment } = req.body;
+
+    // สร้างรีวิวใหม่
+    const newReview = await ProductReview.create({
+      reviewer_id: userId,
+      reviewed_id: reviewedId,
+      review_type: reviewType,
+      rating: rating,
+      comment: comment
+    });
+
+    res.status(201).json({ success: true, review: newReview });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดในการสร้างรีวิว' });
+  }
+});
+
+app.post('/api/reviews/comments', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { reviewId, comment } = req.body;
+
+    // ตรวจสอบว่ารีวิวที่ต้องการตอบกลับถูกสร้างโดยผู้ใช้เราหรือไม่
+    const review = await ProductReview.findOne({ where: { id: reviewId, reviewer_id: userId } });
+    if (!review) {
+      return res.status(400).json({ success: false, message: 'ไม่สามารถตอบกลับรีวิวนี้ได้' });
+    }
+
+    // สร้างคอมเมนต์ใหม่
+    const newComment = await EquipmentRentComment.create({
+      review_id: reviewId,
+      commenter_id: userId,
+      comment: comment
+    });
+
+    res.status(201).json({ success: true, comment: newComment });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดในการสร้างคอมเมนต์' });
+  }
+});
+
+app.get('/api/products/:id/reviews', authenticateToken, async (req, res) => {
+  try {
+    const productId = req.params.id;
+
+    // ค้นหารีวิวของสินค้านี้จาก ProductReview
+    const reviews = await ProductReview.findAll({ 
+      where: { reviewed_id: productId },
+      include: [{ model: User, attributes: ['firstname', 'lastname'] }] // เพิ่มข้อมูลของผู้ใช้ที่ทำรีวิว
+    });
+
+    res.status(200).json({ success: true, reviews: reviews });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดในการดึงข้อมูลรีวิว' });
+  }
+});
 
   sequelize.sync({ force: false }).then(() => {
   console.log("Database synced");
