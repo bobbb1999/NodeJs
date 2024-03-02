@@ -304,6 +304,7 @@ const ProductReview  = sequelize.define(
   }
 );
 
+ProductReview.belongsTo(products, { foreignKey: 'reviewed_id' });
 ProductReview.belongsTo(User, { foreignKey: 'reviewer_id' }); // สมมติว่า reviewer_id เป็นคีย์เอาไว้เชื่อมโมเดล ProductReview กับโมเดล User
 // User.hasMany(ProductReview, { foreignKey: 'reviewer_id' });
 // ProductReview.belongsTo(User, { foreignKey: 'reviewer_id' });
@@ -311,56 +312,60 @@ ProductReview.belongsTo(User, { foreignKey: 'reviewer_id' }); // สมมติ
 // User.hasMany(ProductReview, { foreignKey: 'reviewed_id' });
 // ProductReview.belongsTo(User, { foreignKey: 'reviewed_id' });
 
-const reviews = sequelize.define("reviews", {
-  id: {
-    type: Sequelize.INTEGER,
-    primaryKey: true,
-    autoIncrement: true,
-  },
-  title: {
-    type: Sequelize.STRING(255),
-    allowNull: false,
-  },
-  content: {
-    type: Sequelize.TEXT,
-    allowNull: false,
-  },
-  rating: {
-    type: Sequelize.INTEGER,
-    allowNull: false,
-  },
-  user_id: {
-    type: Sequelize.INTEGER,
-    references: {
-      model: User,
-      key: 'id',
-      onDelete: 'CASCADE', // เพิ่มคำสั่ง onDelete ที่เป็น 'CASCADE'
-    },
-    allowNull: false,
-  },
-  equipment_rental_profile_id: {
-    type: Sequelize.INTEGER,
-    foreignKey: {
-      references: {
-        table: "photography_equipment_rental_profile",
-        key: "id",
-      },
-      onDelete: "CASCADE",
-    },
-    allowNull: true,
-  },
-  photographer_profile_id: {
-    type: Sequelize.INTEGER,
-    foreignKey: {
-      references: {
-        table: "photographer_profile",
-        key: "id",
-      },
-      onDelete: "CASCADE",
-    },
-    allowNull: true,
-  },
-});
+
+
+
+
+// const reviews = sequelize.define("reviews", {
+//   id: {
+//     type: Sequelize.INTEGER,
+//     primaryKey: true,
+//     autoIncrement: true,
+//   },
+//   title: {
+//     type: Sequelize.STRING(255),
+//     allowNull: false,
+//   },
+//   content: {
+//     type: Sequelize.TEXT,
+//     allowNull: false,
+//   },
+//   rating: {
+//     type: Sequelize.INTEGER,
+//     allowNull: false,
+//   },
+//   user_id: {
+//     type: Sequelize.INTEGER,
+//     references: {
+//       model: User,
+//       key: 'id',
+//       onDelete: 'CASCADE', // เพิ่มคำสั่ง onDelete ที่เป็น 'CASCADE'
+//     },
+//     allowNull: false,
+//   },
+//   equipment_rental_profile_id: {
+//     type: Sequelize.INTEGER,
+//     foreignKey: {
+//       references: {
+//         table: "photography_equipment_rental_profile",
+//         key: "id",
+//       },
+//       onDelete: "CASCADE",
+//     },
+//     allowNull: true,
+//   },
+//   photographer_profile_id: {
+//     type: Sequelize.INTEGER,
+//     foreignKey: {
+//       references: {
+//         table: "photographer_profile",
+//         key: "id",
+//       },
+//       onDelete: "CASCADE",
+//     },
+//     allowNull: true,
+//   },
+// });
 
 
 const PhotographerProfile = sequelize.define(
@@ -473,6 +478,47 @@ const RentEquipmentProfile = sequelize.define(
   }
 );
 
+const PhotographerReview  = sequelize.define(
+  "photographer_reviews",
+  {
+    id: {
+      type: Sequelize.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    reviewer_id: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      references: {
+        model: User,
+        key: 'id',
+      },
+    },
+    reviewed_id: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      references: {
+        model: PhotographerProfile,
+        key: 'id',
+      },
+    },
+    rating: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      // คะแนนดาว 1-5
+    },
+    comment: {
+      type: Sequelize.TEXT,
+      allowNull: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+PhotographerReview.belongsTo(PhotographerProfile, {foreignKey: 'reviewed_id'});
+PhotographerReview.belongsTo(User, {foreignKey: 'reviewer_id'});
 
 // sequelize.sync();
 
@@ -1575,8 +1621,13 @@ app.get('/api/getPhotographerProfile/:id', authenticateToken, async (req, res) =
 
 app.get('/api/getEquipmentRentProfile/:id', authenticateToken, async (req, res) => {
   try {
+    const { id } = req.params;
     // Find PhotographerProfile by ID
-    const rentEquipmentProfile = await RentEquipmentProfile.findByPk(req.params.id);
+    const rentEquipmentProfile = await RentEquipmentProfile.findOne({
+      where: {
+        user_id: id,
+      },
+    });
 
     if (!rentEquipmentProfile) {
       return res.status(404).json({ error: 'RentEquipmentProfile not found' });
@@ -1718,7 +1769,7 @@ app.get('/rent/:id', async (req, res) => {
   }
 });
 
-app.post('/api/reviews', authenticateToken, async (req, res) => {
+app.post('/api/reviewsProduct', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id
     const { reviewedId, reviewType, rating, comment } = req.body;
@@ -1728,6 +1779,26 @@ app.post('/api/reviews', authenticateToken, async (req, res) => {
       reviewer_id: userId,
       reviewed_id: reviewedId,
       review_type: reviewType,
+      rating: rating,
+      comment: comment
+    });
+
+    res.status(201).json({ success: true, review: newReview });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดในการสร้างรีวิว' });
+  }
+});
+
+app.post('/api/reviewsPhotographer', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id
+    const { reviewedId, rating, comment } = req.body;
+
+    // สร้างรีวิวใหม่
+    const newReview = await ProductReview.create({
+      reviewer_id: userId,
+      reviewed_id: reviewedId,
       rating: rating,
       comment: comment
     });
@@ -1778,6 +1849,154 @@ app.get('/api/products/:id/reviews', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดในการดึงข้อมูลรีวิว' });
+  }
+});
+
+app.get('/api/photographer/:id/reviews', authenticateToken, async (req, res) => {
+  try {
+    const photographerId = req.params.id;
+
+    // ค้นหารีวิวของสินค้านี้จาก ProductReview
+    const reviews = await PhotographerReview.findAll({ 
+      where: { reviewed_id: photographerId },
+      include: [{ model: User, attributes: ['firstname', 'lastname'] }] // เพิ่มข้อมูลของผู้ใช้ที่ทำรีวิว
+    });
+
+    res.status(200).json({ success: true, reviews: reviews });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดในการดึงข้อมูลรีวิว' });
+  }
+});
+
+// app.get('/api/products/:productId/avg-rating', async (req, res) => {
+//   try {
+//     const productId = req.params.productId;
+
+//     // คำนวณค่าเฉลี่ยคะแนนดาวโดยใช้ SQL function AVG() และ group by product_id
+//     const avgRating = await ProductReview.findAll({
+//       attributes: [
+//         [sequelize.fn('AVG', sequelize.col('rating')), 'avgRating']
+//       ],
+//       where: { id: productId }
+//     });
+
+//     res.status(200).json({ success: true, avgRating: avgRating.avgRating });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดในการคำนวณค่าเฉลี่ยคะแนนดาว' });
+//   }
+// });
+
+// app.get('/api/products/:productId/reviews', async (req, res) => {
+//   try {
+//     const productId = req.params.productId;
+
+//     // ค้นหารีวิวของสินค้านี้จาก ProductReview
+//     const reviews = await ProductReview.findAll({ 
+//       where: { id: productId },
+//       attributes: [
+//         [sequelize.fn('AVG', sequelize.col('rating')), 'avg_rating']
+//       ],
+//       include: [{ model: User, attributes: ['firstname', 'lastname'] }] // เพิ่มข้อมูลของผู้ใช้ที่ทำรีวิว
+//     });
+
+//     res.status(200).json({ success: true, reviews: reviews });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดในการดึงข้อมูลรีวิว' });
+//   }
+// });
+
+
+// app.get('/api/products/:productId/average-rating',authenticateToken, async (req, res) => {
+//   try {
+//     const productId = req.params.productId;
+
+//     // คำนวณค่าเฉลี่ยของคะแนนดาว
+//     const result = await ProductReview.findAll({
+//       attributes: [[sequelize.fn('AVG', sequelize.col('rating')), 'averageRating']], // คำนวณค่าเฉลี่ยของคะแนนดาว
+//       where: {
+//         reviewed_id: productId, // productId เป็น id ของสินค้าที่ต้องการดูคะแนนเฉลี่ย
+//         review_type: 'rent_equipment' // รีวิวของสินค้า
+//       },
+//       include: [{ model: products }] // เชื่อมตาราง Product เพื่อใช้งานข้อมูลเพิ่มเติมเกี่ยวกับสินค้า
+//     });
+
+
+//     res.status(200).json({ success: true, averageRating: Number(result[0].dataValues.averageRating) });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดในการคำนวณค่าเฉลี่ยของคะแนนดาว' });
+//   }
+// });
+
+
+app.get('/api/product/average-rating/:productId', async (req, res) => {
+  const productId = req.params.productId;
+
+  try {
+    // คำนวณค่าเฉลี่ยของคะแนนดาวโดยใช้ Sequelize Query
+    const result = await sequelize.query(
+      `SELECT AVG(rating) AS average_rating
+       FROM product_reviews
+       WHERE reviewed_id = :productId`, 
+      {
+        replacements: { productId },
+        type: Sequelize.QueryTypes.SELECT
+      }
+    );
+
+    // ส่งค่าเฉลี่ยของคะแนนดาวกลับไปให้ Client
+    res.json({ averageRating: parseFloat(result[0].average_rating).toFixed(1) });
+  } catch (error) {
+    console.error('Error fetching average rating:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/photographer/average-rating/:photographerId', async (req, res) => {
+  const photographerId = req.params.photographerId;
+
+  try {
+    // คำนวณค่าเฉลี่ยของคะแนนดาวโดยใช้ Sequelize Query
+    const result = await sequelize.query(
+      `SELECT AVG(rating) AS average_rating
+       FROM photographer_reviews
+       WHERE reviewed_id = :photographerId`, 
+      {
+        replacements: { photographerId },
+        type: Sequelize.QueryTypes.SELECT
+      }
+    );
+
+    // ส่งค่าเฉลี่ยของคะแนนดาวกลับไปให้ Client
+    res.json({ averageRating: parseFloat(result[0].average_rating).toFixed(1) });
+  } catch (error) {
+    console.error('Error fetching average rating:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/product/getReviewCount/:productId', async (req, res) => {
+  try {
+    const productId = req.params.productId;
+    const reviewCount = await ProductReview.count({ where: { reviewed_id: productId } });
+    res.json({ reviewCount: reviewCount });
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/photographer/getReviewCount/:photographerId', async (req, res) => {
+  try {
+    const photographerId = req.params.photographerId;
+    const reviewCount = await PhotographerReview.count({ where: { reviewed_id: photographerId } });
+    res.json({ reviewCount: reviewCount });
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
