@@ -1728,46 +1728,46 @@ app.get('/api/photographer/:id', authenticateToken , async (req, res) => {
 
 
 // Protected route for getting a specific photo by ID
-app.get('/photographer/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
+// app.get('/photographer/:id', async (req, res) => {
+//   try {
+//     const { id } = req.params;
 
-    const photographer = await PhotographerProfile.findOne({ where: { id } });
+//     const photographer = await PhotographerProfile.findOne({ where: { id } });
 
-    if (!photographer) {
-      return res.status(404).json({ error: 'ไม่พบช่างภาพ' });
-    }
+//     if (!photographer) {
+//       return res.status(404).json({ error: 'ไม่พบช่างภาพ' });
+//     }
 
-    // ตรวจสอบว่ามีรูปภาพหรือไม่
-    const imgPath = `C:\\Users\\User\\Desktop\\React-TailwindCSS-Front-main\\public\\img_profile${photographer.imgProfile}`;
+//     // ตรวจสอบว่ามีรูปภาพหรือไม่
+//     const imgPath = `C:\\Users\\User\\Desktop\\React-TailwindCSS-Front-main\\public\\img_profile${photographer.imgProfile}`;
 
-    // เพิ่ม URL ของรูปภาพใน JSON response
-    const photographerWithImage = {
-      ...photographer.toJSON(),
-      imgProfileUrl: imgPath,
-    };
+//     // เพิ่ม URL ของรูปภาพใน JSON response
+//     const photographerWithImage = {
+//       ...photographer.toJSON(),
+//       imgProfileUrl: imgPath,
+//     };
 
-    res.json(photographerWithImage);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+//     res.json(photographerWithImage);
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
 
 
-app.get('/rent/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const rent = await User.findOne({ where: { id, role: 'rent' } });
+// app.get('/rent/:id', async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const rent = await User.findOne({ where: { id, role: 'rent' } });
 
-    if (!rent) {
-      return res.status(404).json({ error: 'ไม่พบผู้ให้เช่าอุปกรณ์' });
-    }
+//     if (!rent) {
+//       return res.status(404).json({ error: 'ไม่พบผู้ให้เช่าอุปกรณ์' });
+//     }
 
-    res.json(rent);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+//     res.json(rent);
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
 
 app.post('/api/reviewsProduct', authenticateToken, async (req, res) => {
   try {
@@ -1796,7 +1796,7 @@ app.post('/api/reviewsPhotographer', authenticateToken, async (req, res) => {
     const { reviewedId, rating, comment } = req.body;
 
     // สร้างรีวิวใหม่
-    const newReview = await ProductReview.create({
+    const newReview = await PhotographerReview.create({
       reviewer_id: userId,
       reviewed_id: reviewedId,
       rating: rating,
