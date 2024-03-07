@@ -130,6 +130,60 @@ const PhotographerVerify = sequelize.define(
   }
 );
 
+const RentEquipmentProfile = sequelize.define(
+  "RentEquipment_profile",
+  {
+    id: {
+      type: Sequelize.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    user_id: {
+      type: Sequelize.INTEGER,
+      references: {
+        model: User,
+        key: 'id',
+        onDelete: 'CASCADE', // เพิ่มคำสั่ง onDelete ที่เป็น 'CASCADE'
+      },
+      allowNull: false,
+    },
+    username:{
+      type: Sequelize.STRING,
+      allowNull: false,
+    },
+    province: {
+      type: Sequelize.JSON,
+      allowNull: false,
+    },
+    lineId: {
+      type: Sequelize.STRING,
+      allowNull: false,
+    },
+    Facebook: {
+      type: Sequelize.STRING,
+      allowNull: false,
+    },
+    Instagram: {
+      type: Sequelize.STRING,
+      allowNull: false,
+    },
+    Tel: {
+      type: Sequelize.STRING,
+      allowNull: false,
+    },
+    imgProfile: {
+      type: Sequelize.STRING,
+      allowNull: false,
+    },
+    about: {
+      type: Sequelize.TEXT,
+      allowNull: false,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
 
 // โปรไฟล์ผู้ว่าจ้าง
 const EquipmentRentalVerify = sequelize.define(
@@ -313,61 +367,6 @@ ProductReview.belongsTo(User, { foreignKey: 'reviewer_id' }); // สมมติ
 // ProductReview.belongsTo(User, { foreignKey: 'reviewed_id' });
 
 
-
-
-
-// const reviews = sequelize.define("reviews", {
-//   id: {
-//     type: Sequelize.INTEGER,
-//     primaryKey: true,
-//     autoIncrement: true,
-//   },
-//   title: {
-//     type: Sequelize.STRING(255),
-//     allowNull: false,
-//   },
-//   content: {
-//     type: Sequelize.TEXT,
-//     allowNull: false,
-//   },
-//   rating: {
-//     type: Sequelize.INTEGER,
-//     allowNull: false,
-//   },
-//   user_id: {
-//     type: Sequelize.INTEGER,
-//     references: {
-//       model: User,
-//       key: 'id',
-//       onDelete: 'CASCADE', // เพิ่มคำสั่ง onDelete ที่เป็น 'CASCADE'
-//     },
-//     allowNull: false,
-//   },
-//   equipment_rental_profile_id: {
-//     type: Sequelize.INTEGER,
-//     foreignKey: {
-//       references: {
-//         table: "photography_equipment_rental_profile",
-//         key: "id",
-//       },
-//       onDelete: "CASCADE",
-//     },
-//     allowNull: true,
-//   },
-//   photographer_profile_id: {
-//     type: Sequelize.INTEGER,
-//     foreignKey: {
-//       references: {
-//         table: "photographer_profile",
-//         key: "id",
-//       },
-//       onDelete: "CASCADE",
-//     },
-//     allowNull: true,
-//   },
-// });
-
-
 const PhotographerProfile = sequelize.define(
   "photographer_profile",
   {
@@ -405,6 +404,10 @@ const PhotographerProfile = sequelize.define(
       type: Sequelize.STRING,
       allowNull: false,
     },
+    Tel: {
+      type: Sequelize.STRING,
+      allowNull: false,
+    },
     selectedOptions: {
       type: Sequelize.JSON,
       allowNull: true,
@@ -423,60 +426,7 @@ const PhotographerProfile = sequelize.define(
   }
 );
 
-const RentEquipmentProfile = sequelize.define(
-  "RentEquipment_profile",
-  {
-    id: {
-      type: Sequelize.INTEGER,
-      primaryKey: true,
-      autoIncrement: true,
-    },
-    user_id: {
-      type: Sequelize.INTEGER,
-      references: {
-        model: User,
-        key: 'id',
-        onDelete: 'CASCADE', // เพิ่มคำสั่ง onDelete ที่เป็น 'CASCADE'
-      },
-      allowNull: false,
-    },
-    username:{
-      type: Sequelize.STRING,
-      allowNull: false,
-    },
-    province: {
-      type: Sequelize.JSON,
-      allowNull: false,
-    },
-    lineId: {
-      type: Sequelize.STRING,
-      allowNull: false,
-    },
-    Facebook: {
-      type: Sequelize.STRING,
-      allowNull: false,
-    },
-    Instagram: {
-      type: Sequelize.STRING,
-      allowNull: false,
-    },
-    Tel: {
-      type: Sequelize.STRING,
-      allowNull: false,
-    },
-    imgProfile: {
-      type: Sequelize.STRING,
-      allowNull: false,
-    },
-    about: {
-      type: Sequelize.TEXT,
-      allowNull: false,
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
+
 
 const PhotographerReview  = sequelize.define(
   "photographer_reviews",
@@ -520,7 +470,14 @@ const PhotographerReview  = sequelize.define(
 PhotographerReview.belongsTo(PhotographerProfile, {foreignKey: 'reviewed_id'});
 PhotographerReview.belongsTo(User, {foreignKey: 'reviewer_id'});
 
+
+PhotographerProfile.hasOne(PhotographerVerify, { foreignKey: 'user_id' });
+PhotographerVerify.belongsTo(PhotographerProfile, { foreignKey: 'user_id',  targetKey: 'user_id'});
 // sequelize.sync();
+// EquipmentRentalVerify.belongsTo(RentEquipmentProfile, { foreignKey: 'user_id' });
+RentEquipmentProfile.hasOne(EquipmentRentalVerify, { foreignKey: 'user_id' });
+EquipmentRentalVerify.belongsTo(RentEquipmentProfile, { foreignKey: 'user_id',  targetKey: 'user_id'});
+
 
 const storageworkings = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -885,7 +842,7 @@ app.delete('/api/deleteproduct/:id', authenticateToken, async function (req, res
 app.post('/api/accountprofile',authenticateToken,uploadprofile.single('imgProfile'), async (req, res) => {
   try {
     const user_id = req.user.id;
-    const { username, about, lineId, Facebook, Instagram, selectedOptions, selectedOptions2  } = req.body;
+    const { username, about, lineId, Facebook, Instagram, selectedOptions, selectedOptions2, Tel } = req.body;
     const imgProfile = req.file.filename;
     // Save the form data to the database
     const NewPhotographerProfile = await PhotographerProfile.create({
@@ -894,6 +851,7 @@ app.post('/api/accountprofile',authenticateToken,uploadprofile.single('imgProfil
       lineId,
       Facebook,
       Instagram,
+      Tel,
       selectedOptions,
       selectedOptions2,
       imgProfile,
@@ -908,6 +866,72 @@ app.post('/api/accountprofile',authenticateToken,uploadprofile.single('imgProfil
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+app.patch('/api/accountprofilephotos', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { username, about, lineId, Facebook, Instagram, selectedOptions, selectedOptions2, Tel } = req.body;
+
+    // Find the existing profile of the user
+    let existingProfile = await PhotographerProfile.findOne({ user_id: userId });
+
+    if (!existingProfile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    // Update the fields if they are provided, otherwise keep the existing values
+    existingProfile.username = username || existingProfile.username;
+    existingProfile.about = about || existingProfile.about;
+    existingProfile.lineId = lineId || existingProfile.lineId;
+    existingProfile.Facebook = Facebook || existingProfile.Facebook;
+    existingProfile.Instagram = Instagram || existingProfile.Instagram;
+    existingProfile.selectedOptions = selectedOptions || existingProfile.selectedOptions;
+    existingProfile.selectedOptions2 = selectedOptions2 || existingProfile.selectedOptions2;
+    existingProfile.Tel = Tel || existingProfile.Tel;
+
+    // Save the updated profile
+    existingProfile = await existingProfile.save();
+
+    // Respond with a success message
+    res.status(200).json({ message: 'Profile updated successfully', PhotographerProfile: existingProfile });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
+app.patch('/api/updateProfilePhotographer', authenticateToken, uploadprofile.single('imgProfile'), async (req, res) => {
+  try {
+    const userId = req.user.id;
+    console.log(userId);
+    const { username, about, lineId, Facebook, Instagram, selectedOptions, selectedOptions2, Tel } = req.body;
+
+    // ดึงข้อมูลโปรไฟล์ของช่างภาพจากฐานข้อมูล
+    let photographerProfile = await PhotographerProfile.findOne({ where: { user_id: userId } });
+
+    // ตรวจสอบว่ามีการส่งข้อมูลมาหรือไม่ และอัพเดทเฉพาะข้อมูลที่มีการส่งมาเท่านั้น
+    if (username) photographerProfile.username = username;
+    if (about) photographerProfile.about = about;
+    if (lineId) photographerProfile.lineId = lineId;
+    if (Facebook) photographerProfile.Facebook = Facebook;
+    if (Instagram) photographerProfile.Instagram = Instagram;
+    if (selectedOptions) photographerProfile.selectedOptions = selectedOptions;
+    if (selectedOptions2) photographerProfile.selectedOptions2 = selectedOptions2;
+    if (Tel) photographerProfile.Tel = Tel;
+    if (req.file) photographerProfile.imgProfile = req.file.filename;
+
+    // บันทึกการเปลี่ยนแปลงลงในฐานข้อมูล
+    await photographerProfile.save();
+
+    // ตอบกลับด้วยข้อความสำเร็จ
+    res.status(200).json({ message: 'Profile updated successfully', PhotographerProfile: photographerProfile });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 
 // แก้ไข endpoint สำหรับการสร้างโปรไฟล์
 app.post('/api/accountprofilerent',authenticateToken,uploadprofile.single('imgProfile'), async (req, res) => {
@@ -942,6 +966,7 @@ app.get('/api/getAllPhotographerProfiles', authenticateToken, async (req, res) =
     // Find all PhotographerProfiles
     const photographerProfiles = await PhotographerProfile.findAll();
 
+
     if (!photographerProfiles) {
       return res.status(404).json({ error: 'PhotographerProfiles not found' });
     }
@@ -960,28 +985,130 @@ app.get('/api/getAllPhotographerProfiles', authenticateToken, async (req, res) =
   }
 });
 
-app.get('/api/getAllRentProfiles', authenticateToken, async (req, res) => {
+// app.get('/api/getAllRentProfiles', authenticateToken, async (req, res) => {
+//   try {
+//     // Find all RentEquipmentProfiles
+//     const RentEquipmentProfiles = await RentEquipmentProfile.findAll();
+
+//     if (!RentEquipmentProfiles) {
+//       return res.status(404).json({ error: 'RentEquipmentProfiles not found' });
+//     }
+
+//     // สร้าง URL สำหรับรูปภาพและเพิ่มในข้อมูลทุกๆโปรไฟล์
+//     const profilesWithImageURLs = RentEquipmentProfiles.map(profile => ({
+//       ...profile.dataValues,
+//       imgProfileURL: `${req.protocol}://${req.get('host')}/imgprofile/${profile.imgProfile}`,
+//       status: profile.EquipmentRentalVerify ? profile.EquipmentRentalVerify.status : null,
+//     }));
+
+//     // ส่งข้อมูล RentEquipmentProfiles พร้อม URL รูปภาพและ status กลับ
+//     res.status(200).json({ RentEquipmentProfiles: profilesWithImageURLs });
+//   } catch (error) {
+//     console.error('Error fetching RentEquipmentProfiles data:', error);
+//     res.status(500).json({ error: 'Internal Server Error' });
+//   }
+// });
+
+app.get('/api/getAllRentProfilesAndStatus', authenticateToken , async (req, res) => {
   try {
-    // Find all PhotographerProfiles
-    const RentEquipmentProfiles = await RentEquipmentProfile.findAll();
+    const rentalVerifies = await EquipmentRentalVerify.findAll({
+      attributes: ['id', 'user_id', 'status'],
+      include: [{
+        model: RentEquipmentProfile,
+        as: 'RentEquipment_profile',
+        attributes: ['id','user_id', 'username', 'province', 'imgProfile'],
+      }],
+      where: {
+        status: 'success' // เพิ่มเงื่อนไขที่ status เป็น 'success' เท่านั้น
+      }
+    });
+    
+    // ดึง user_id ทั้งหมดจาก rentalVerifies
+    const userIDs = rentalVerifies.map(rentalVerify => rentalVerify.user_id);
 
-    if (!RentEquipmentProfiles) {
-      return res.status(404).json({ error: 'PhotographerProfiles not found' });
-    }
+    // ดึงข้อมูลจาก RentEquipmentProfile ที่มี user_id ที่อยู่ใน rentalVerifies
+    const rentEquipmentProfiles = await RentEquipmentProfile.findAll({
+      attributes: ['id','user_id', 'username', 'province', 'imgProfile'],
+      where: {
+        user_id: userIDs
+      }
+    });
 
-    // สร้าง URL สำหรับรูปภาพและเพิ่มในข้อมูลทุกๆโปรไฟล์
-    const profilesWithImageURLs = RentEquipmentProfiles.map(profile => ({
-      ...profile.dataValues,
-      imgProfileURL: `${req.protocol}://${req.get('host')}/imgprofile/${profile.imgProfile}`,
-    }));
+    // สร้าง object ของ rentEquipmentProfiles โดยใช้ user_id เป็น key
+    const profilesMap = rentEquipmentProfiles.reduce((acc, profile) => {
+      acc[profile.user_id] = profile;
+      return acc;
+    }, {});
 
-    // ส่งข้อมูล PhotographerProfiles พร้อม URL รูปภาพกลับ
-    res.status(200).json({ RentEquipmentProfiles: profilesWithImageURLs });
+    // สร้าง JSON response โดยใช้ข้อมูลจาก rentalVerifies และ rentEquipmentProfiles
+    const result = rentalVerifies.map(rentalVerify => {
+      const imgProfileURL = `${req.protocol}://${req.get('host')}/imgprofile/${profilesMap[rentalVerify.user_id]?.imgProfile || ''}`;
+      return {
+        user_id: rentalVerify.user_id,
+        status: rentalVerify.status,
+        RentEquipmentProfile: profilesMap[rentalVerify.user_id] ? {
+          ...profilesMap[rentalVerify.user_id].toJSON(),
+          imgProfileURL: imgProfileURL
+        } : null
+      };
+    });
+
+    res.status(200).json(result);
   } catch (error) {
-    console.error('Error fetching PhotographerProfiles data:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
   }
 });
+
+
+app.get('/api/getAllPhotographerProfilesAndStatus', authenticateToken , async (req, res) => {
+  try {
+    const photographerVerifies = await PhotographerVerify.findAll({
+      attributes: ['user_id', 'status'],
+      where: {
+        status: 'success' // เพิ่มเงื่อนไขที่ status เป็น 'success' เท่านั้น
+      }
+    });
+
+    // ดึง user_id ทั้งหมดจาก photographerVerifies
+    const userIDs = photographerVerifies.map(profile => profile.user_id);
+
+    // ดึงข้อมูลจาก profile ที่มี user_id ที่อยู่ใน photographerVerifies
+    const photographerProfiles = await PhotographerProfile.findAll({
+      attributes: ['id','user_id', 'username', 'selectedOptions','selectedOptions2', 'imgProfile'],
+      where: {
+        user_id: userIDs
+      }
+    });
+
+    // สร้าง object ของ photographerProfiles โดยใช้ user_id เป็น key
+    const profilesMap = photographerProfiles.reduce((acc, profile) => {
+      acc[profile.user_id] = profile;
+      return acc;
+    }, {});
+
+    // สร้าง JSON response โดยใช้ข้อมูลจาก photographerVerifies และ photographerProfiles
+    const result = photographerVerifies.map(profile => {
+      if (profilesMap[profile.user_id]) {
+        const imgProfileURL = `${req.protocol}://${req.get('host')}/imgprofile/${profilesMap[profile.user_id].imgProfile}`;
+        return {
+          photographerProfiles: {
+            ...profilesMap[profile.user_id].toJSON(),
+            imgProfileURL: imgProfileURL
+          }
+        };
+      } else {
+        return null; // ถ้าไม่มีข้อมูลใน PhotographerProfile ส่งค่า null แทน
+      }
+    }).filter(profile => profile !== null); // กรองข้อมูลที่มีค่าเป็น null ออก
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
 
 app.get('/api/getDataVerify', authenticateToken, async (req, res) => {
   try {
@@ -1618,6 +1745,33 @@ app.get('/api/getPhotographerProfile/:id', authenticateToken, async (req, res) =
   }
 });
 
+app.get('/api/getMePhotographerProfile/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id
+    // Find PhotographerProfile by ID
+    const photographerProfile = await PhotographerProfile.findOne({
+      where: {
+        user_id: userId,
+      },
+    });
+
+    if (!photographerProfile) {
+      return res.status(404).json({ error: 'PhotographerProfile not found' });
+    }
+
+    // Create URL for the profile image
+    const profileWithImageURL = {
+      ...photographerProfile.dataValues,
+      imgProfileURL: `${req.protocol}://${req.get('host')}/imgprofile/${photographerProfile.imgProfile}`,
+    };
+
+    // Send PhotographerProfile data with image URL back
+    res.status(200).json({ photographerProfile: profileWithImageURL });
+  } catch (error) {
+    console.error('Error fetching PhotographerProfile data by ID:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 app.get('/api/getEquipmentRentProfile/:id', authenticateToken, async (req, res) => {
   try {
