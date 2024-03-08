@@ -605,6 +605,42 @@ app.post('/api/uploadworkings',authenticateToken, uploadworkings.array('file', 1
   }
 });
 
+app.patch('/api/updateworking/:id', authenticateToken, uploadworkings.array('file', 12), async function (req, res, next) {
+  try {
+    const { work_name, description } = req.body;
+    const { id } = req.params;
+
+    // ตรวจสอบว่ามี ID ของผลงานที่ต้องการอัปเดตหรือไม่
+    const existingWork = await workings.findByPk(id);
+    if (!existingWork) {
+      return res.status(404).json({ error: 'Work not found.' });
+    }
+
+    // ตรวจสอบว่าผู้ใช้ที่ทำการร้องขอการอัปเดตเป็นเจ้าของผลงานหรือไม่
+    if (existingWork.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized access.' });
+    }
+
+    // ทำการอัปเดตข้อมูล
+    existingWork.work_name = work_name || existingWork.work_name;
+    existingWork.description = description || existingWork.description;
+    
+    // ตรวจสอบว่ามีไฟล์อัปโหลดมาด้วยหรือไม่
+    if (req.files && req.files.length > 0) {
+      const fileNames = req.files.map(file => file.filename);
+      existingWork.image_path = fileNames.join(', ');
+    }
+    
+    // บันทึกการเปลี่ยนแปลง
+    await existingWork.save();
+
+    res.status(200).json({ success: true, work: existingWork });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.post('/api/uploadproduct',authenticateToken, uploadproduct.array('file', 4), async function (req, res, next) {
   try {
 
@@ -706,6 +742,41 @@ app.get('/api/getworkings/:id', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/getMyWorkings/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Fetch workings data for the specific user
+    const userWorkings = await workings.findAll({
+      where: {
+        user_id: userId,
+      },
+    });
+
+    // If no workings found for the user
+    if (!userWorkings || userWorkings.length === 0) {
+      return res.status(404).json({ error: 'No workings found for the user.' });
+    }
+
+    // Create an array to store workings with image URLs
+    const workingsWithImages = userWorkings.map(work => {
+      const imagePaths = work.image_path.split(',').map(path => path.trim());
+      const imageUrls = imagePaths.map(imagePath => `${req.protocol}://${req.get('host')}/albumworkings/${imagePath}`);
+      return {
+        ...work.dataValues,
+        imageUrls,
+      };
+    });
+
+    // Return the data and image URLs
+    res.status(200).json({ workings: workingsWithImages });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
 app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -743,6 +814,48 @@ app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
 app.get('/api/getAllProducts/:id', authenticateToken, async (req, res) => {
   try {
     const userId = req.params.id;
+    const { category } = req.query; // เพิ่มบรรทัดนี้เพื่อรับค่า category จาก query parameter
+
+    let whereClause = {
+      user_id: userId,
+    };
+
+    // เพิ่มเงื่อนไขการกรองตาม category ถ้ามี category ที่ถูกส่งมา
+    if (category) {
+      whereClause.category = category;
+    }
+
+    // Fetch workings data for the specific user
+    const userProducts = await products.findAll({
+      where: whereClause, // ใช้ whereClause เพื่อกรองผลลัพธ์ตาม category
+    });
+
+    // If no workings found for the user
+    if (!userProducts || userProducts.length === 0) {
+      return res.status(404).json({ error: 'No products found for the user.' });
+    }
+
+    // Create an array to store workings with image URLs
+    const productsWithImages = userProducts.map(product => {
+      const imagePaths = product.imgProduct.split(',').map(path => path.trim());
+      const imageUrls = imagePaths.map(imagePath => `${req.protocol}://${req.get('host')}/product/${imagePath}`);
+      return {
+        ...product.dataValues,
+        imageUrls,
+      };
+    });
+
+    // Return the data and image URLs
+    res.status(200).json({ products: productsWithImages });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/getAllProductsOnProfile/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
     const { category } = req.query; // เพิ่มบรรทัดนี้เพื่อรับค่า category จาก query parameter
 
     let whereClause = {
@@ -904,7 +1017,6 @@ app.patch('/api/accountprofilephotos', authenticateToken, async (req, res) => {
 app.patch('/api/updateProfilePhotographer', authenticateToken, uploadprofile.single('imgProfile'), async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log(userId);
     const { username, about, lineId, Facebook, Instagram, selectedOptions, selectedOptions2, Tel } = req.body;
 
     // ดึงข้อมูลโปรไฟล์ของช่างภาพจากฐานข้อมูล
@@ -1773,6 +1885,34 @@ app.get('/api/getMePhotographerProfile/:id', authenticateToken, async (req, res)
   }
 });
 
+app.get('/api/getMeRentalProfile/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id
+    // Find PhotographerProfile by ID
+    const rentEquipmentProfile = await RentEquipmentProfile.findOne({
+      where: {
+        user_id: userId,
+      },
+    });
+
+    if (!rentEquipmentProfile) {
+      return res.status(404).json({ error: 'rentEquipmentProfile not found' });
+    }
+
+    // Create URL for the profile image
+    const profileWithImageURL = {
+      ...rentEquipmentProfile.dataValues,
+      imgProfileURL: `${req.protocol}://${req.get('host')}/imgprofile/${rentEquipmentProfile.imgProfile}`,
+    };
+
+    // Send PhotographerProfile data with image URL back
+    res.status(200).json({ rentEquipmentProfile: profileWithImageURL });
+  } catch (error) {
+    console.error('Error fetching PhotographerProfile data by ID:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.get('/api/getEquipmentRentProfile/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -2153,6 +2293,71 @@ app.get('/api/photographer/getReviewCount/:photographerId', async (req, res) => 
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+app.get('/api/photographer/best-photos', async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    // คำนวณค่าเฉลี่ยของคะแนนดาวโดยใช้ Sequelize Query
+    const result = await sequelize.query(
+      `SELECT *
+       FROM photographer_reviews
+       WHERE reviewed_id = :userId
+       GROUP BY photo_id
+       HAVING AVG(rating) = 5.0`, 
+      {
+        replacements: { userId },
+        type: Sequelize.QueryTypes.SELECT
+      }
+    );
+
+    // ส่งรูปภาพที่มีคะแนนเฉลี่ยเท่ากับ 5.0 ของผู้ใช้ปัจจุบันกลับไปให้ Client
+    res.json({ bestPhotos: result });
+  } catch (error) {
+    console.error('Error fetching best photos:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/photographer/check-average-rating/:id', authenticateToken , async (req, res) => {
+  const userId = req.user.id
+
+  try {
+    // ค้นหา photographerId จากตาราง PhotographerProfile โดยใช้ userId
+    const photographerProfile = await PhotographerProfile.findOne({
+      where: { user_id: userId }
+    });
+
+    if (!photographerProfile) {
+      return res.status(404).json({ error: 'Photographer profile not found' });
+    }
+
+    const photographerId = photographerProfile.id;
+
+    // คำนวณค่าเฉลี่ยของคะแนนดาวโดยใช้ Sequelize Query
+    const result = await sequelize.query(
+      `SELECT AVG(rating) AS average_rating
+       FROM photographer_reviews
+       WHERE reviewed_id = :photographerId`, 
+      {
+        replacements: { photographerId },
+        type: Sequelize.QueryTypes.SELECT
+      }
+    );
+
+    // ตรวจสอบว่าค่าเฉลี่ยเป็น 5.0 หรือไม่
+    const averageRating = parseFloat(result[0].average_rating).toFixed(1);
+    if (averageRating === '5.0') {
+      return res.status(200).json({ message: 'Average rating is 5.0' });
+    } else {
+      return res.status(404).json({ message: 'Average rating is not 5.0' });
+    }
+  } catch (error) {
+    console.error('Error fetching average rating:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
   sequelize.sync({ force: false }).then(() => {
   console.log("Database synced");
