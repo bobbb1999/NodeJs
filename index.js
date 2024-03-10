@@ -630,7 +630,7 @@ app.patch('/api/updateworking/:id', authenticateToken, uploadworkings.array('fil
       const fileNames = req.files.map(file => file.filename);
       existingWork.image_path = fileNames.join(', ');
     }
-    
+
     // บันทึกการเปลี่ยนแปลง
     await existingWork.save();
 
@@ -1044,6 +1044,34 @@ app.patch('/api/updateProfilePhotographer', authenticateToken, uploadprofile.sin
   }
 });
 
+app.patch('/api/updateProfileRentEquipment', authenticateToken, uploadprofile.single('imgProfile'), async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { username, about, lineId, Facebook, Instagram, Tel, province } = req.body;
+
+    // ดึงข้อมูลโปรไฟล์ของการเช่าอุปกรณ์จากฐานข้อมูล
+    let rentEquipmentProfile = await RentEquipmentProfile.findOne({ where: { user_id: userId } });
+
+    // ตรวจสอบว่ามีการส่งข้อมูลมาหรือไม่ และอัพเดทเฉพาะข้อมูลที่มีการส่งมาเท่านั้น
+    if (username) rentEquipmentProfile.username = username;
+    if (about) rentEquipmentProfile.about = about;
+    if (lineId) rentEquipmentProfile.lineId = lineId;
+    if (Facebook) rentEquipmentProfile.Facebook = Facebook;
+    if (Instagram) rentEquipmentProfile.Instagram = Instagram;
+    if (Tel) rentEquipmentProfile.Tel = Tel;
+    if (province) rentEquipmentProfile.province = province;
+    if (req.file) rentEquipmentProfile.imgProfile = req.file.filename;
+
+    // บันทึกการเปลี่ยนแปลงลงในฐานข้อมูล
+    await rentEquipmentProfile.save();
+
+    // ตอบกลับด้วยข้อความสำเร็จ
+    res.status(200).json({ message: 'Profile updated successfully', RentEquipmentProfile: rentEquipmentProfile });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 // แก้ไข endpoint สำหรับการสร้างโปรไฟล์
 app.post('/api/accountprofilerent',authenticateToken,uploadprofile.single('imgProfile'), async (req, res) => {
