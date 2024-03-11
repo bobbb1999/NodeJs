@@ -2386,6 +2386,18 @@ app.get('/api/photographer/check-average-rating/:id', authenticateToken , async 
   }
 });
 
+app.get('/api/admin/all-users', authenticateToken , checkUserRole('admin') , async (req, res) => {
+  try {
+    const users = await User.findAll({
+      attributes: { exclude: ['password'] } // ระบุให้ Sequelize ไม่รวมฟิลด์ password
+    });
+    res.json(users);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้' });
+  }
+});
+
 
   sequelize.sync({ force: false }).then(() => {
   console.log("Database synced");
