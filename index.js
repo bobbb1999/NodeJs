@@ -260,6 +260,15 @@ const workings = sequelize.define("workings",{
     },
     allowNull: false,
   },
+  employer_id: {
+    type: Sequelize.INTEGER,
+    references: {
+      model: User,
+      key: 'id',
+      onDelete: 'CASCADE', // เพิ่มคำสั่ง onDelete ที่เป็น 'CASCADE'
+    },
+    allowNull: false,
+  },
   work_name: {
     type: Sequelize.STRING,
     allowNull: false,
@@ -582,6 +591,18 @@ const storageworkings = multer.diskStorage({
 
 const uploadworkings = multer({ storage: storageworkings })
 
+const storagereports = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'imgreport/')
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+    cb(null, file.fieldname + '-' + uniqueSuffix + ".jpg")
+  }
+})
+
+const uploadreports = multer({ storage: storagereports })
+
 const storageprofile = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, 'imgprofile/')
@@ -852,8 +873,11 @@ app.get('/api/getMyWorkings/:id', authenticateToken, async (req, res) => {
 
     // Create an array to store workings with image URLs
     const workingsWithImages = userWorkings.map(work => {
-      const imagePaths = work.image_path.split(',').map(path => path.trim());
-      const imageUrls = imagePaths.map(imagePath => `${req.protocol}://${req.get('host')}/albumworkings/${imagePath}`);
+      let imageUrls = [];
+      if (work.image_path) { // Check if image_path is not empty
+        const imagePaths = work.image_path.split(',').map(path => path.trim());
+        imageUrls = imagePaths.map(imagePath => `${req.protocol}://${req.get('host')}/albumworkings/${imagePath}`);
+      }
       return {
         ...work.dataValues,
         imageUrls,
@@ -867,6 +891,7 @@ app.get('/api/getMyWorkings/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
 
 
 app.get('/api/getproducts/:id', authenticateToken, async (req, res) => {
@@ -2542,7 +2567,7 @@ app.get('/api/jobhiring', authenticateToken, async (req, res) => {
     // ค้นหา JobHiring โดยใช้ user_id ของผู้ใช้งานปัจจุบัน
     const jobHirings = await JobHiring.findAll({
       where: { photographer_id : photographerId},
-      include: [{ model: User, attributes: ['firstname', 'lastname'] }] // รวมข้อมูลผู้ใช้งานด้วย
+      include: [{ model: User, attributes: ['id','firstname', 'lastname'] }] // รวมข้อมูลผู้ใช้งานด้วย
     });
     res.json(jobHirings); // ส่งข้อมูล JobHiring กลับไปยัง client
   } catch (error) {
@@ -2550,6 +2575,35 @@ app.get('/api/jobhiring', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงข้อมูล JobHiring' });
   }
 });
+
+// ใช้ล่าสุด ใช้ได้
+// app.patch('/api/status-Job_hiring/:jobId', authenticateToken , async (req, res) => {
+//   const jobId = req.params.jobId;
+//   const { status } = req.body;
+
+//   try {
+//     // Find the job hiring record
+//     const jobHiring = await JobHiring.findOne({
+//       where: {
+//         id: jobId,
+//         photographer_id: req.user.id // Filter by the photographer_id which is same as the logged-in photographer's user_id
+//       }
+//     });
+
+//     if (!jobHiring) {
+//       return res.status(404).json({ error: 'Job hiring not found.' });
+//     }
+
+//     // Update the status
+//     jobHiring.status = status;
+//     await jobHiring.save();
+
+//     return res.status(200).json({ message: 'Job status updated successfully.' });
+//   } catch (error) {
+//     console.error('Error updating job status:', error);
+//     return res.status(500).json({ error: 'An internal server error occurred.' });
+//   }
+// });
 
 app.patch('/api/status-Job_hiring/:jobId', authenticateToken , async (req, res) => {
   const jobId = req.params.jobId;
@@ -2572,12 +2626,26 @@ app.patch('/api/status-Job_hiring/:jobId', authenticateToken , async (req, res) 
     jobHiring.status = status;
     await jobHiring.save();
 
+    // If status is accepted, create a new working entry
+    if (status === "accepted") {
+      await workings.create({
+        user_id: req.user.id,
+        employer_id: jobHiring.user_id,
+        work_name: "", 
+        description: "", 
+        image_path: "", 
+        status: "hide" 
+      });
+    }
+
     return res.status(200).json({ message: 'Job status updated successfully.' });
   } catch (error) {
     console.error('Error updating job status:', error);
     return res.status(500).json({ error: 'An internal server error occurred.' });
   }
 });
+
+
 
   sequelize.sync({ force: false }).then(() => {
   console.log("Database synced");
