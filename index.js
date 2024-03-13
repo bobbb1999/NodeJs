@@ -272,6 +272,11 @@ const workings = sequelize.define("workings",{
     type: Sequelize.STRING,
     allowNull: false,
   },
+  status: {
+    type: Sequelize.STRING,
+    allowNull: false,
+    defaultValue: "show"
+  },
 });
 
 const products = sequelize.define("products",{
@@ -466,6 +471,92 @@ const PhotographerReview  = sequelize.define(
     timestamps: true,
   }
 );
+
+const JobHiring = sequelize.define(
+  "job_hiring",
+  {
+    id: {
+      type: Sequelize.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    user_id: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      references: {
+        model: User,
+        key: 'id',
+      },
+    },
+    photographer_id: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      references: {
+        model: PhotographerProfile,
+        key: 'user_id',
+      },
+    },
+    job_description: {
+      type: Sequelize.TEXT,
+      allowNull: false,
+    },
+    status: {
+      type: Sequelize.STRING,
+      allowNull: false,
+      // สถานะการจ้างงาน เช่น "pending", "accepted", "completed", "cancelled" เป็นต้น
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+const Report = sequelize.define(
+  "report",
+  {
+    id: {
+      type: Sequelize.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    reporter_id: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      references: {
+        model: User,
+        key: 'id',
+      },
+    },
+    photographer_id: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      references: {
+        model: PhotographerProfile,
+        key: 'user_id',
+      },
+    },
+    detail: {
+      type: Sequelize.TEXT,
+      allowNull: false,
+    },
+    imgReport: {
+      type: Sequelize.STRING,
+      allowNull: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+
+
+Report.belongsTo(User, { foreignKey: 'user_id' });
+Report.belongsTo(PhotographerProfile, { foreignKey: 'photographer_id' });
+
+
+JobHiring.belongsTo(User, { foreignKey: 'user_id' });
+JobHiring.belongsTo(PhotographerProfile, { foreignKey: 'photographer_id' });
 
 PhotographerReview.belongsTo(PhotographerProfile, {foreignKey: 'reviewed_id'});
 PhotographerReview.belongsTo(User, {foreignKey: 'reviewer_id'});
@@ -716,6 +807,7 @@ app.get('/api/getworkings/:id', authenticateToken, async (req, res) => {
     const userWorkings = await workings.findAll({
       where: {
         user_id: userId,
+        status: 'show'
       },
     });
 
@@ -2398,6 +2490,94 @@ app.get('/api/admin/all-users', authenticateToken , checkUserRole('admin') , asy
   }
 });
 
+
+app.patch('/api/changeStatusWorkings/:id', authenticateToken , async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  try {
+    // ค้นหา workings ด้วย id
+    const working = await workings.findByPk(id);
+
+    if (!working) {
+      return res.status(404).json({ error: 'Workings not found' });
+    }
+
+    // อัพเดทข้อมูลของ status
+    await working.update({ status });
+
+    return res.status(200).json(working);
+  } catch (error) {
+    console.error('Error updating status:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// POST endpoint to create a job hiring
+app.post('/api/user/job-hiring', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const photographerId = req.body.photographerId;
+
+    // Create job hiring with status set to "pending"
+    const jobHiring = await JobHiring.create({
+      user_id: userId,
+      photographer_id: photographerId,
+      job_description: req.body.job_description,
+      status: "pending"
+    });
+
+    res.status(201).json(jobHiring);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
+app.get('/api/jobhiring', authenticateToken, async (req, res) => {
+  try {
+
+    const photographerId = req.user.id
+    // ค้นหา JobHiring โดยใช้ user_id ของผู้ใช้งานปัจจุบัน
+    const jobHirings = await JobHiring.findAll({
+      where: { photographer_id : photographerId},
+      include: [{ model: User, attributes: ['firstname', 'lastname'] }] // รวมข้อมูลผู้ใช้งานด้วย
+    });
+    res.json(jobHirings); // ส่งข้อมูล JobHiring กลับไปยัง client
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงข้อมูล JobHiring' });
+  }
+});
+
+app.patch('/api/status-Job_hiring/:jobId', authenticateToken , async (req, res) => {
+  const jobId = req.params.jobId;
+  const { status } = req.body;
+
+  try {
+    // Find the job hiring record
+    const jobHiring = await JobHiring.findOne({
+      where: {
+        id: jobId,
+        photographer_id: req.user.id // Filter by the photographer_id which is same as the logged-in photographer's user_id
+      }
+    });
+
+    if (!jobHiring) {
+      return res.status(404).json({ error: 'Job hiring not found.' });
+    }
+
+    // Update the status
+    jobHiring.status = status;
+    await jobHiring.save();
+
+    return res.status(200).json({ message: 'Job status updated successfully.' });
+  } catch (error) {
+    console.error('Error updating job status:', error);
+    return res.status(500).json({ error: 'An internal server error occurred.' });
+  }
+});
 
   sequelize.sync({ force: false }).then(() => {
   console.log("Database synced");
