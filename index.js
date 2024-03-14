@@ -481,6 +481,52 @@ const PhotographerReview  = sequelize.define(
   }
 );
 
+const ReviewWorking = sequelize.define(
+  "working_reviews",
+  {
+    id: {
+      type: Sequelize.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    photographer_id: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      references: {
+        model: User,
+        key: 'id',
+      },
+    },
+    employer_id: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      references: {
+        model: User,
+        key: 'id',
+      },
+    },
+    working_id: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
+      references: {
+        model: workings,
+        key: 'id',
+      },
+    },
+    rating: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
+    },
+    comment: {
+      type: Sequelize.TEXT,
+      allowNull: false,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
 const JobHiring = sequelize.define(
   "job_hiring",
   {
@@ -570,6 +616,9 @@ JobHiring.belongsTo(PhotographerProfile, { foreignKey: 'photographer_id' });
 PhotographerReview.belongsTo(PhotographerProfile, {foreignKey: 'reviewed_id'});
 PhotographerReview.belongsTo(User, {foreignKey: 'reviewer_id'});
 
+ReviewWorking.belongsTo(PhotographerProfile, {foreignKey: 'photographer_id'})
+ReviewWorking.belongsTo(User, {foreignKey: 'employer_id'})
+ReviewWorking.belongsTo(workings, {foreignKey: 'working_id'})
 
 PhotographerProfile.hasOne(PhotographerVerify, { foreignKey: 'user_id' });
 PhotographerVerify.belongsTo(PhotographerProfile, { foreignKey: 'user_id',  targetKey: 'user_id'});
@@ -2645,7 +2694,56 @@ app.patch('/api/status-Job_hiring/:jobId', authenticateToken , async (req, res) 
   }
 });
 
+app.post('/api/review_workings',authenticateToken, async (req, res) => {
+  try {
+    // Extract data from request body
+    const { photographer_id, working_id, rating, comment } = req.body;
+    const employerId = req.user.id
 
+    const working = await workings.findOne({
+      where: {
+        id: working_id,
+        employer_id: employerId 
+      }
+    });
+
+    if (!working) {
+      return res.status(400).json({ error: "You are not authorized to review this working." });
+    }
+
+    // Create the review
+    const review = await ReviewWorking.create({
+      photographer_id: photographer_id,
+      employer_id: employerId, // Use the ID of the authenticated user as the employer_id
+      working_id: working_id,
+      rating: rating ,
+      comment: comment
+    });
+
+    return res.status(201).json({ review });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get('/api/getreview_workings/:photographerId',authenticateToken , async (req, res) => {
+  try {
+    const photographerId = req.params.photographerId;
+
+    // Find reviews by photographerId
+    const reviews = await ReviewWorking.findAll({
+      where: {
+        photographer_id: photographerId
+      }
+    });
+
+    return res.status(200).json({ reviews });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
 
   sequelize.sync({ force: false }).then(() => {
   console.log("Database synced");
