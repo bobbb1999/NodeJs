@@ -2466,6 +2466,29 @@ app.get('/api/photographer/average-rating/:photographerId', async (req, res) => 
   }
 });
 
+app.get('/api/photographer/avg-rating/:photographerId', async (req, res) => {
+  const photographerId = req.params.photographerId;
+
+  try {
+    // คำนวณค่าเฉลี่ยของคะแนนดาวโดยใช้ Sequelize Query
+    const result = await sequelize.query(
+      `SELECT AVG(rating) AS average_rating
+       FROM working_reviews
+       WHERE photographer_id = :photographerId`, 
+      {
+        replacements: { photographerId },
+        type: Sequelize.QueryTypes.SELECT
+      }
+    );
+
+    // ส่งค่าเฉลี่ยของคะแนนดาวกลับไปให้ Client
+    res.json({ averageRating: parseFloat(result[0].average_rating).toFixed(1) });
+  } catch (error) {
+    console.error('Error fetching average rating:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/api/product/getReviewCount/:productId', async (req, res) => {
   try {
     const productId = req.params.productId;
@@ -2481,6 +2504,17 @@ app.get('/api/photographer/getReviewCount/:photographerId', async (req, res) => 
   try {
     const photographerId = req.params.photographerId;
     const reviewCount = await PhotographerReview.count({ where: { reviewed_id: photographerId } });
+    res.json({ reviewCount: reviewCount });
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/photographer/ReviewCount/:photographerId', async (req, res) => {
+  try {
+    const photographerId = req.params.photographerId;
+    const reviewCount = await ReviewWorking.count({ where: { photographer_id: photographerId } });
     res.json({ reviewCount: reviewCount });
   } catch (error) {
     console.error("Error:", error);
@@ -2727,7 +2761,8 @@ app.post('/api/review_workings',authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/getreview_workings/:photographerId',authenticateToken , async (req, res) => {
+
+app.get('/api/getreview_workings/:photographerId' , authenticateToken , async (req, res) => {
   try {
     const photographerId = req.params.photographerId;
 
@@ -2735,10 +2770,11 @@ app.get('/api/getreview_workings/:photographerId',authenticateToken , async (req
     const reviews = await ReviewWorking.findAll({
       where: {
         photographer_id: photographerId
-      }
+      },
+      include: [{ model: User, attributes: ['firstname', 'lastname'] }]
     });
 
-    return res.status(200).json({ reviews });
+    return res.status(200).json({ reviews: reviews });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Internal server error" });
