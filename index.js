@@ -2547,6 +2547,45 @@ app.get('/api/photographer/best-photos', async (req, res) => {
   }
 });
 
+// app.get('/api/photographer/check-average-rating/:id', authenticateToken , async (req, res) => {
+//   const userId = req.user.id
+
+//   try {
+//     // ค้นหา photographerId จากตาราง PhotographerProfile โดยใช้ userId
+//     const photographerProfile = await PhotographerProfile.findOne({
+//       where: { user_id: userId }
+//     });
+
+//     if (!photographerProfile) {
+//       return res.status(404).json({ error: 'Photographer profile not found' });
+//     }
+
+//     const photographerId = photographerProfile.id;
+
+//     // คำนวณค่าเฉลี่ยของคะแนนดาวโดยใช้ Sequelize Query
+//     const result = await sequelize.query(
+//       `SELECT AVG(rating) AS average_rating
+//        FROM photographer_reviews
+//        WHERE reviewed_id = :photographerId`, 
+//       {
+//         replacements: { photographerId },
+//         type: Sequelize.QueryTypes.SELECT
+//       }
+//     );
+
+//     // ตรวจสอบว่าค่าเฉลี่ยเป็น 5.0 หรือไม่
+//     const averageRating = parseFloat(result[0].average_rating).toFixed(1);
+//     if (averageRating === '5.0') {
+//       return res.status(200).json({ message: 'Average rating is 5.0' });
+//     } else {
+//       return res.status(404).json({ message: 'Average rating is not 5.0' });
+//     }
+//   } catch (error) {
+//     console.error('Error fetching average rating:', error);
+//     res.status(500).json({ error: 'Internal server error' });
+//   }
+// });
+
 app.get('/api/photographer/check-average-rating/:id', authenticateToken , async (req, res) => {
   const userId = req.user.id
 
@@ -2565,8 +2604,8 @@ app.get('/api/photographer/check-average-rating/:id', authenticateToken , async 
     // คำนวณค่าเฉลี่ยของคะแนนดาวโดยใช้ Sequelize Query
     const result = await sequelize.query(
       `SELECT AVG(rating) AS average_rating
-       FROM photographer_reviews
-       WHERE reviewed_id = :photographerId`, 
+       FROM working_reviews
+       WHERE photographer_id = :photographerId`, 
       {
         replacements: { photographerId },
         type: Sequelize.QueryTypes.SELECT
