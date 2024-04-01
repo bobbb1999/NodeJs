@@ -1463,7 +1463,7 @@ app.get('/api/getDataVerify', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/getDataVerifyByStatus', authenticateToken, async (req, res) => {
+app.get('/api/getDataVerifyByStatus', authenticateToken, checkUserRole('admin'), async (req, res) => {
   try {
     // Extract status from query parameters
     const { status } = req.query;
@@ -1503,7 +1503,7 @@ app.get('/api/getDataVerifyByStatus', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/getDataVerifyRentByStatus', authenticateToken, async (req, res) => {
+app.get('/api/getDataVerifyRentByStatus', authenticateToken, checkUserRole('admin'), async (req, res) => {
   try {
     // Extract status from query parameters
     const { status } = req.query;
