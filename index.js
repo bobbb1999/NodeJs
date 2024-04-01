@@ -11,7 +11,9 @@ const dotenv = require('dotenv');
 const jwt_decode = require('jwt-decode');
 // const fileUpload = require('express-fileupload');
 const { DataTypes } = require('sequelize');
-
+const nodemailer = require('nodemailer');
+const Datastore = require('nedb');
+const pinsDB = new Datastore({ filename: 'pins.db', autoload: true });
 dotenv.config();
 
 const app = express();
@@ -26,7 +28,16 @@ app.use('/imgcard', express.static('imgcard'));
 app.use('/imgface', express.static('imgface'));
 // app.use(bodyParser.json());
 // app.use(fileUpload());
-app.use(bodyParser.urlencoded({extended:false}))
+app.use(bodyParser.urlencoded({extended:false}));
+app.use(bodyParser.json()); 
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL,
+    pass: process.env.PASSWORD_GMAIL
+  }
+});
 
 
 const sequelize = new Sequelize(process.env.DB_DATABASE, process.env.DB_USER, process.env.DB_PASSWORD, {
@@ -101,6 +112,10 @@ const PhotographerVerify = sequelize.define(
       allowNull: false,
     },
     email: {
+      type: Sequelize.STRING,
+      allowNull: false,
+    },
+    verified_email:{
       type: Sequelize.STRING,
       allowNull: false,
     },
@@ -219,6 +234,10 @@ const EquipmentRentalVerify = sequelize.define(
       type: Sequelize.STRING,
       allowNull: false,
     },
+    verified_email:{
+      type: Sequelize.STRING,
+      allowNull: false,
+    },
     address: {
       type: Sequelize.STRING,
       allowNull: false,
@@ -267,7 +286,7 @@ const workings = sequelize.define("workings",{
       key: 'id',
       onDelete: 'CASCADE', // เพิ่มคำสั่ง onDelete ที่เป็น 'CASCADE'
     },
-    allowNull: false,
+    allowNull: true,
   },
   work_name: {
     type: Sequelize.STRING,
@@ -1444,6 +1463,86 @@ app.get('/api/getDataVerify', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/getDataVerifyByStatus', authenticateToken, async (req, res) => {
+  try {
+    // Extract status from query parameters
+    const { status } = req.query;
+
+    // Validate status parameter
+    if (!status) {
+      return res.status(400).json({ error: 'Status parameter is required' });
+    }
+
+    // Find PhotographerVerify by status
+    const photographerVerifyByStatus = await PhotographerVerify.findAll({
+      where: {
+        status: status // Filter by status
+      }
+    });
+
+    if (!photographerVerifyByStatus || photographerVerifyByStatus.length === 0) {
+      return res.status(404).json({ error: 'No PhotographerVerify found with the specified status' });
+    }
+
+    // Map PhotographerVerify to include image URLs
+    const verifyWithImageURLs = photographerVerifyByStatus.map(verify => {
+      const imgCardURL = verify.imgCardId ? `${req.protocol}://${req.get('host')}/imgcard/${verify.imgCardId}` : '';
+      const imgFaceURL = verify.imgFace ? `${req.protocol}://${req.get('host')}/imgface/${verify.imgFace}` : '';
+      return {
+        photographerVerify: verify,
+        imgCardURL,
+        imgFaceURL
+      };
+    });
+
+    // Send the PhotographerVerify data along with the image URLs
+    res.status(200).json(verifyWithImageURLs);
+  } catch (error) {
+    console.error('Error fetching PhotographerVerify data by status:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.get('/api/getDataVerifyRentByStatus', authenticateToken, async (req, res) => {
+  try {
+    // Extract status from query parameters
+    const { status } = req.query;
+
+    // Validate status parameter
+    if (!status) {
+      return res.status(400).json({ error: 'Status parameter is required' });
+    }
+
+    // Find PhotographerVerify by status
+    const EquipmentRentalVerifyByStatus = await EquipmentRentalVerify.findAll({
+      where: {
+        status: status // Filter by status
+      }
+    });
+
+    if (!EquipmentRentalVerifyByStatus || EquipmentRentalVerifyByStatus.length === 0) {
+      return res.status(404).json({ error: 'No PhotographerVerify found with the specified status' });
+    }
+
+    // Map PhotographerVerify to include image URLs
+    const verifyWithImageURLs = EquipmentRentalVerifyByStatus.map(verify => {
+      const imgCardURL = verify.imgCardId ? `${req.protocol}://${req.get('host')}/imgcard/${verify.imgCardId}` : '';
+      const imgFaceURL = verify.imgFace ? `${req.protocol}://${req.get('host')}/imgface/${verify.imgFace}` : '';
+      return {
+        EquipmentRentalVerify: verify,
+        imgCardURL,
+        imgFaceURL
+      };
+    });
+
+    // Send the PhotographerVerify data along with the image URLs
+    res.status(200).json(verifyWithImageURLs);
+  } catch (error) {
+    console.error('Error fetching PhotographerVerify data by status:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.get('/api/getDataVerifyRent', authenticateToken, async (req, res) => {
   try {
     // Find all PhotographerVerify
@@ -1739,7 +1838,7 @@ app.post("/api/VerifyPhotograhper", authenticateToken, uploadverify.fields([{ na
   try {
     const user_id = req.user.id;
     // Extract data from the request body and multer file objects
-    const { fullName, email, birthdate, lineId, address, idCardNumber , status } = req.body;
+    const { fullName, email, birthdate, lineId, address, idCardNumber , verified_email } = req.body;
     const imgFace = req.files['imgFace'][0].filename;
     const imgCardId = req.files['imgCardId'][0].filename;
 
@@ -1748,6 +1847,7 @@ app.post("/api/VerifyPhotograhper", authenticateToken, uploadverify.fields([{ na
       user_id: user_id,
       fullName,
       email,
+      verified_email,
       birthdate,
       lineId,
       address,
@@ -2819,6 +2919,288 @@ app.get('/api/getreview_workings/:photographerId' , authenticateToken , async (r
     return res.status(500).json({ error: "Internal server error" });
   }
 });
+
+
+function generateRandomPin(digits) {
+  const min = Math.pow(10, digits - 1);
+  const max = Math.pow(10, digits) - 1;
+  const pin = Math.floor(Math.random() * (max - min + 1)) + min;
+  const timestamp = Date.now(); // เพิ่ม timestamp ของการสร้าง PIN
+  return { pin, timestamp };
+}
+
+app.post('/send-verification-email', (req, res) => {
+  const { email } = req.body;
+  const { pin, timestamp } = generateRandomPin(6); // เรียกใช้ฟังก์ชัน generateRandomPin
+  const pinData = { email, pin, timestamp }; // เพิ่ม timestamp ลงในข้อมูล PIN
+
+  pinsDB.findOne({ email: email }, (err, existingPin) => {
+    if (err) {
+      console.error('Error finding pin data:', err);
+      res.status(500).send('Internal Server Error');
+    } else if (existingPin) {
+      // มี email นี้อยู่แล้วในฐานข้อมูล ให้ทำการอัปเดตข้อมูล
+      pinsDB.update({ email: email }, { $set: { pin: pinData.pin, timestamp: pinData.timestamp } }, {}, (err, numUpdated) => {
+        if (err) {
+          console.error('Error updating pin data:', err);
+          res.status(500).send('Failed to update pin data');
+        } else {
+          sendVerificationEmail(email, pinData.pin, res);
+        }
+      });
+    } else {
+      // ไม่มี email นี้ในฐานข้อมูล ให้ทำการเพิ่มข้อมูลใหม่
+      pinsDB.insert(pinData, (err, newPin) => {
+        if (err) {
+          console.error('Error inserting pin data:', err);
+          res.status(500).send('Failed to save pin data');
+        } else {
+          sendVerificationEmail(email, pinData.pin, res);
+        }
+      });
+    }
+  });
+});
+
+function sendVerificationEmail(email, pin, res) {
+  const mailOptions = {
+    from: 'EasyPhoto@info.com',
+    to: email,
+    subject: 'Email Verification',
+    html: `
+    <p>เรียน ${email},</p>
+    <p>ขอบคุณที่ท่านได้ลงทะเบียนกับ EasyPhoto ของเรา ทางทีมงานขอเป็นสุขที่จะช่วยเพิ่มความปลอดภัยให้กับบัญชีของท่านด้วยการส่งรหัส PIN 6 ตัว เพื่อใช้ในการยืนยันอีเมล ดังนี้:</p>
+    <p><strong>รหัส PIN:</strong> ${pin}</p>
+    <p>กรุณาใช้รหัส PIN เพื่อใช้ในการยืนยันอีเมลของท่าน และหากท่านมีคำถามหรือข้อสงสัยใดๆ โปรดอย่าลังเลที่จะติดต่อทีมงานของเราผ่านทางอีเมลนี้ครับ/ค่ะ.</p>
+    <p>ขอบคุณอย่างสูง,</p>
+    <p>ทีมงาน EasyPhoto</p>
+  `
+  };
+
+  transporter.sendMail(mailOptions, (error, info) => {
+    if (error) {
+      console.error(error);
+      res.status(500).send('Failed to send verification email');
+    } else {
+      console.log('Email sent: ' + info.response);
+      res.status(200).send('Verification email sent successfully');
+    }
+  });
+}
+
+app.post('/verify-token', (req, res) => {
+  const { email, pin } = req.body;
+  const currentTimestamp = Date.now();
+  const oneDayInMilliseconds = 60 * 60 * 1000;
+
+  pinsDB.findOne({ email: email, pin: parseInt(pin) }, (err, pinData) => {
+    if (err) {
+      console.error('Error finding pin data:', err);
+      res.status(500).send('Internal Server Error');
+    } else if (!pinData) {
+      res.status(404).send('Invalid token or email');
+    } else {
+      // ตรวจสอบเวลาว่ายังอยู่ในช่วงที่ถูกต้องหรือไม่ (ไม่เกิน 120 วินาที)
+      if (currentTimestamp - pinData.timestamp <= 120000) {
+        // ลบข้อมูล email นั้นหลังจากผ่านไป 1 วัน
+        setTimeout(() => {
+          pinsDB.remove({ email: email }, {}, (err, numRemoved) => {
+            if (err) {
+              console.error('Error removing pin data:', err);
+            } else {
+              console.log(`Removed ${numRemoved} document(s) for email: ${email}`);
+            }
+          });
+        }, oneDayInMilliseconds);
+
+        res.status(200).send('Token verified successfully');
+      } else {
+        res.status(401).send('Token expired'); // หมดเวลาการใช้งาน
+      }
+    }
+  });
+});
+
+app.post("/generate-password", async (req, res) => {
+  const { email } = req.body;
+
+  // Generate a random password (you can implement your own logic here)
+  const randomPassword = Math.random().toString(36).slice(-8);
+
+  try {
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+    // Update the user record with the hashed password
+    await User.update(
+      { password: hashedPassword },
+      { where: { email: email } }
+    );
+
+    // Send the email with the generated password
+    const mailOptions = {
+      from: "infoEasyPhoto@gmail.com",
+      to: email,
+      subject: "Your new password",
+      text: `Your new password is: ${randomPassword}`,
+    };
+
+    transporter.sendMail(mailOptions, function (error, info) {
+      if (error) {
+        console.error("Error:", error);
+        res.status(500).json({ error: "Internal server error" });
+      } else {
+        console.log("Email sent: " + info.response);
+        res.status(200).json({ message: "Password updated and email sent" });
+      }
+    });
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.post('/api/change-password', async (req, res) => {
+  try {
+    const { id, oldPassword, newPassword } = req.body;
+
+    // ตรวจสอบว่ามีผู้ใช้งานที่ใช้ email นี้อยู่หรือไม่
+    const user = await User.findOne({ where: { id } });
+    if (!user) {
+      return res.status(404).json({ message: 'ไม่พบผู้ใช้งานที่ใช้ email นี้' });
+    }
+
+    // ตรวจสอบว่ารหัสผ่านเดิมถูกต้องหรือไม่
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'รหัสผ่านเดิมไม่ถูกต้อง' });
+    }
+
+    // แฮชรหัสผ่านใหม่
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // อัปเดตรหัสผ่านใหม่ในฐานข้อมูล
+    await User.update({ password: hashedPassword }, { where: { id } });
+
+    res.status(200).json({ message: 'เปลี่ยนรหัสผ่านเรียบร้อย' });
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน' });
+  }
+});
+
+// app.post('/verify-token', (req, res) => {
+//   const { email, pin } = req.body;
+//   const currentTimestamp = Date.now();
+
+//   pinsDB.findOne({ email: email, pin: parseInt(pin) }, (err, pinData) => {
+//     if (err) {
+//       console.error('Error finding pin data:', err);
+//       res.status(500).send('Internal Server Error');
+//     } else if (!pinData) {
+//       res.status(404).send('Invalid token or email');
+//     } else {
+//       // ตรวจสอบเวลาว่ายังอยู่ในช่วงที่ถูกต้องหรือไม่ (ไม่เกิน 120 วินาที)
+//       if (currentTimestamp - pinData.timestamp <= 120000) {
+//         res.status(200).send('Token verified successfully');
+//       } else {
+//         res.status(401).send('Token expired'); // หมดเวลาการใช้งาน
+//       }
+//     }
+//   });
+// });
+
+
+
+// app.post('/send-verification-emails', (req, res) => {
+//   const { email } = req.body;
+//   const pin = generateRandomNumber(6);
+
+//   const pinData = { email, pin };
+
+//   pinsDB.insert(pinData, (err, newPin) => {
+//     if (err) {
+//       console.error('Error inserting pin data:', err);
+//       res.status(500).send('Failed to save pin data');
+//     } else {
+//       const mailOptions = {
+//         from: 'infoeasyphotos@gmail.com',
+//         to: email,
+//         subject: 'Email Verification',
+//         html: `
+//         <p>เรียน ${email},</p>
+//         <p>ขอบคุณที่ท่านได้ลงทะเบียนกับ EasyPhoto ของเรา ทางทีมงานขอเป็นสุขที่จะช่วยเพิ่มความปลอดภัยให้กับบัญชีของท่านด้วยการส่งรหัส PIN 6 ตัว เพื่อใช้ในการยืนยันอีเมล ดังนี้:</p>
+//         <p><strong>รหัส PIN:</strong> ${pin}</p>
+//         <p>กรุณาใช้รหัส PIN เพื่อใช้ในการยืนยันอีเมลของท่าน และหากท่านมีคำถามหรือข้อสงสัยใดๆ โปรดอย่าลังเลที่จะติดต่อทีมงานของเราผ่านทางอีเมลนี้ครับ/ค่ะ.</p>
+//         <p>ขอบคุณอย่างสูง,</p>
+//         <p>ทีมงาน EasyPhoto</p>
+//       `
+//       };
+
+//       transporter.sendMail(mailOptions, (error, info) => {
+//         if (error) {
+//           console.error(error);
+//           res.status(500).send('Failed to send verification email');
+//         } else {
+//           console.log('Email sent: ' + info.response);
+//           res.status(200).send('Verification email sent successfully');
+//         }
+//       });
+//     }
+//   });
+// });
+
+// app.post('/verify-token', (req, res) => {
+//   const { email, pin } = req.body;
+
+//   pinsDB.findOne({ email: email, pin: parseInt(pin) }, (err, pin) => {
+//     if (err) {
+//       console.error('Error finding pin data:', err);
+//       res.status(500).send('Internal Server Error');
+//     } else if (!pin) {
+//       res.status(404).send('Invalid token or email');
+//     } else {
+//       res.status(200).send('Token verified successfully');
+//     }
+//   });
+// });
+
+
+// app.post('/send-verification-email', (req, res) => {
+//   const { emails } = req.body;
+//   const tokens = generateRandomNumber(6);
+//   users1.set(emails, tokens);
+
+//   const mailOptions = {
+//     from: 'infoeasyphotos@gmail.com',
+//     to: emails,
+//     subject: 'Email Verification',
+//     html: `
+//     <p>เรียน ${emails},</p>
+//     <p>ขอบคุณที่ท่านได้ลงทะเบียนกับ EasyPhoto ของเรา ทางทีมงานขอเป็นสุขที่จะช่วยเพิ่มความปลอดภัยให้กับบัญชีของท่านด้วยการส่งรหัส PIN 6 ตัว เพื่อใช้ในการเข้าสู่ระบบ ดังนี้:</p>
+//     <p><strong>รหัส PIN:</strong> ${tokens}</p>
+//     <p>กรุณาใช้รหัส PIN เพื่อใช้ในการยืนยันอีเมลของท่าน และหากท่านมีคำถามหรือข้อสงสัยใดๆ โปรดอย่าลังเลที่จะติดต่อทีมงานของเราผ่านทางอีเมลนี้ครับ/ค่ะ.</p>
+//     <p>ขอบคุณอย่างสูง,</p>
+//     <p>ทีมงาน EasyPhoto</p>
+//   `
+//   };
+
+//   transporter.sendMail(mailOptions, (error, info) => {
+//     if (error) {
+//       console.error(error);
+//       res.status(500).send('Failed to send verification email');
+//     } else {
+//       console.log('Email sent: ' + info.response);
+//       res.status(200).send('Verification email sent successfully');
+//     }
+//   });
+// });
+
+// function generateRandomNumber(digits) {
+//   const min = Math.pow(10, digits - 1);
+//   const max = Math.pow(10, digits) - 1;
+//   return Math.floor(Math.random() * (max - min + 1)) + min;
+// }
 
   sequelize.sync({ force: false }).then(() => {
   console.log("Database synced");
